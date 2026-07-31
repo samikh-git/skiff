@@ -5,3 +5,5 @@
 .env
 .env.*
 .gitignore.upstream
+__pycache__/
+*.pyc
