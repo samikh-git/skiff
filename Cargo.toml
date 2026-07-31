@@ -28,13 +28,19 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
 
 # Wired in subsequent milestones; keep in tree so feature work compiles early.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart", "blocking"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "multipart", "blocking", "stream", "query"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "signal", "time"] }
 rmcp = { version = "3.1", default-features = false, features = [
     "client",
     "transport-child-process",
+    "transport-streamable-http-client-reqwest",
+    "reqwest",
 ] }
 shell-words = "1"
+http = "1"
+futures = "0.3"
+sse-stream = "0.2"
+url = "2"
 
 [dev-dependencies]
 assert_cmd = "2"

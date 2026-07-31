@@ -4,19 +4,15 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use rmcp::{
-    model::CallToolRequestParams,
     transport::{ConfigureCommandExt, TokioChildProcess},
     ServiceExt,
 };
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use tokio::process::Command;
 
 use crate::cache::{load_cached, save_cache};
 use crate::error::{Error, Result};
-use crate::mcp::extract_mcp_commands;
-use crate::model::CommandDef;
-
-type McpClient = rmcp::service::RunningService<rmcp::RoleClient, ()>;
+use crate::mcp::common::{call_tool_on, list_tools_on, McpClient};
 
 pub async fn fetch_mcp_tools_stdio(
     command_str: &str,
@@ -44,23 +40,9 @@ pub async fn list_tools_stdio(
     env_vars: &BTreeMap<String, String>,
 ) -> Result<Vec<Value>> {
     let client = connect_stdio(command_str, env_vars).await?;
-    let tools = client
-        .list_all_tools()
-        .await
-        .map_err(|e| Error::runtime(format!("list_tools failed: {e}")))?;
+    let tools = list_tools_on(&client).await?;
     let _ = client.cancel().await;
-
-    let mut out = Vec::new();
-    for t in tools {
-        let schema = serde_json::to_value(&t.input_schema)
-            .unwrap_or_else(|_| json!({"type": "object", "properties": {}}));
-        out.push(json!({
-            "name": t.name,
-            "description": t.description.clone().unwrap_or_default(),
-            "inputSchema": schema,
-        }));
-    }
-    Ok(out)
+    Ok(tools)
 }
 
 pub async fn call_tool_stdio(
@@ -71,31 +53,9 @@ pub async fn call_tool_stdio(
     full_envelope: bool,
 ) -> Result<Value> {
     let client = connect_stdio(command_str, env_vars).await?;
-    let params = CallToolRequestParams::new(tool_name.to_string()).with_arguments(arguments);
-    let result = client
-        .call_tool(params)
-        .await
-        .map_err(|e| Error::runtime(format!("call_tool failed: {e}")))?;
+    let result = call_tool_on(&client, tool_name, arguments, full_envelope).await?;
     let _ = client.cancel().await;
-
-    if full_envelope {
-        return serde_json::to_value(&result).map_err(|e| Error::runtime(e.to_string()));
-    }
-
-    let mut texts = Vec::new();
-    for block in &result.content {
-        if let Some(t) = block.as_text() {
-            texts.push(t.text.clone());
-        }
-    }
-    let text = texts.join("\n");
-    if text.is_empty() {
-        Ok(serde_json::to_value(&result).unwrap_or(Value::Null))
-    } else if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
-        Ok(parsed)
-    } else {
-        Ok(Value::String(text))
-    }
+    Ok(result)
 }
 
 async fn connect_stdio(
@@ -120,8 +80,4 @@ async fn connect_stdio(
         .await
         .map_err(|_| Error::runtime("MCP initialize timed out after 30s"))?
         .map_err(|e| Error::runtime(format!("MCP initialize failed: {e}")))
-}
-
-pub fn tools_to_commands(tools: &[Value]) -> Vec<CommandDef> {
-    extract_mcp_commands(tools)
 }

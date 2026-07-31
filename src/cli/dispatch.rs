@@ -16,7 +16,10 @@ use crate::cli::list::{
 use crate::cli::{global_option_sets, split_at_subcommand};
 use crate::error::{Error, Result};
 use crate::filter::filter_commands;
-use crate::mcp::{call_tool_stdio, fetch_mcp_tools_stdio, tools_to_commands};
+use crate::mcp::{
+    call_tool_http, call_tool_stdio, fetch_mcp_tools_http, fetch_mcp_tools_stdio, tools_to_commands,
+    TransportMode,
+};
 use crate::model::BakeConfig;
 use crate::openapi::{
     execute_openapi, extract_openapi_commands, load_openapi_spec, resolve_base_url,
@@ -99,10 +102,8 @@ fn dispatch_impl(argv: Vec<OsString>, bake_config: Option<BakeConfig>) -> Result
         ));
     }
 
-    if pre_args.mcp.is_some() {
-        return Err(Error::runtime(
-            "MCP HTTP mode is not implemented yet; use --mcp-stdio for now",
-        ));
+    if let Some(url) = &pre_args.mcp {
+        return dispatch_mcp_http(&pre_args, url, &tool_argv, bake_config.as_ref());
     }
 
     if let Some(cmd) = &pre_args.mcp_stdio {
@@ -191,6 +192,136 @@ fn dispatch_openapi(
 
     execute_openapi(&parsed, &base_url, &auth, &pre.output_options())?;
     let _ = record_usage(&src_hash, &parsed.command.name);
+    Ok(())
+}
+
+fn dispatch_mcp_http(
+    pre: &GlobalArgs,
+    url: &str,
+    remaining: &[String],
+    bake: Option<&BakeConfig>,
+) -> Result<()> {
+    let auth = pre.parse_auth_headers()?;
+    let transport = TransportMode::parse(&pre.transport)?;
+    let src_hash = source_hash_for(url);
+    let cache_key = pre.cache_key.clone().unwrap_or_else(|| {
+        cache_key_for(&serde_json::json!({
+            "source": url,
+            "is_stdio": false,
+            "auth_headers": auth,
+            "transport": pre.transport,
+        }))
+    });
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| Error::runtime(e.to_string()))?;
+
+    let list_opts = ListOptions {
+        verbose: pre.verbose,
+        compact: pre.compact,
+        json_output: pre.json_output,
+        pretty: pre.pretty,
+        style: ListStyle::Mcp,
+    };
+
+    if pre.list_commands {
+        let tools = rt.block_on(fetch_mcp_tools_http(
+            url,
+            &auth,
+            &cache_key,
+            pre.cache_ttl,
+            pre.refresh,
+            transport,
+        ))?;
+        let mut commands = apply_bake_filter(tools_to_commands(&tools), bake);
+        if let Some(pat) = &pre.search_pattern {
+            commands = filter_by_search(commands, pat);
+            if commands.is_empty() {
+                if pre.json_output {
+                    list_commands(&commands, &list_opts)?;
+                } else {
+                    println!("\nNo tools matching '{pat}'.");
+                }
+                return Ok(());
+            }
+            if !pre.compact && !pre.json_output {
+                println!("\nTools matching '{pat}':");
+            }
+        } else if !pre.compact && !pre.json_output {
+            println!("\nAvailable tools:");
+        }
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        return list_commands(&commands, &list_opts);
+    }
+
+    let tools = rt.block_on(fetch_mcp_tools_http(
+        url,
+        &auth,
+        &cache_key,
+        pre.cache_ttl,
+        pre.refresh,
+        transport,
+    ))?;
+    let commands = apply_bake_filter(tools_to_commands(&tools), bake);
+
+    if remaining.is_empty() {
+        if !pre.compact && !pre.json_output {
+            println!("Available tools:");
+        }
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        list_commands(&commands, &list_opts)?;
+        if !pre.compact && !pre.json_output {
+            println!("\nUse --list for the same output, or provide a subcommand.");
+        }
+        return Ok(());
+    }
+
+    if remaining.get(1).map(String::as_str) == Some("--help")
+        || remaining.get(1).map(String::as_str) == Some("-h")
+    {
+        if let Some(cmd) = commands.iter().find(|c| c.name == remaining[0]) {
+            print_command_help(cmd);
+            return Ok(());
+        }
+    }
+
+    let parsed = match parse_tool_args(&commands, remaining) {
+        Err(Error::Usage(msg)) if msg == "__help__" => return Ok(()),
+        other => other?,
+    };
+
+    let arguments: Map<String, Value> = if parsed.stdin {
+        match read_stdin_json("MCP tool arguments")? {
+            Value::Object(map) => map,
+            other => {
+                return Err(Error::runtime(format!(
+                    "MCP --stdin expects a JSON object, got {}",
+                    other
+                )));
+            }
+        }
+    } else {
+        parsed.values.into_iter().collect()
+    };
+
+    let tool_name = parsed
+        .command
+        .tool_name
+        .clone()
+        .unwrap_or_else(|| parsed.command.name.clone());
+
+    let data = rt.block_on(call_tool_http(
+        url,
+        &auth,
+        &tool_name,
+        arguments,
+        pre.json_output,
+        transport,
+    ))?;
+    output_result(data, &pre.output_options())?;
+    let _ = record_usage(&src_hash, &tool_name);
     Ok(())
 }
 

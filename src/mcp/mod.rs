@@ -1,8 +1,14 @@
 //! MCP tool extraction and client transports.
 
+mod common;
+mod http;
+mod sse;
 mod stdio;
+mod transport;
 
-pub use stdio::{call_tool_stdio, fetch_mcp_tools_stdio, tools_to_commands};
+pub use common::tools_to_commands;
+pub use stdio::{call_tool_stdio, fetch_mcp_tools_stdio};
+pub use transport::{call_tool as call_tool_http, fetch_mcp_tools as fetch_mcp_tools_http, TransportMode};
 
 use serde_json::Value;
 

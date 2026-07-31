@@ -13,9 +13,13 @@ cargo test
 # MCP stdio
 ./target/release/mcp2cli --mcp-stdio "python3 ./tests/fixtures/mcp_test_server.py" --list
 ./target/release/mcp2cli --mcp-stdio "npx @modelcontextprotocol/server-filesystem /tmp" read-file --path /tmp/hello.txt
+
+# MCP HTTP (streamable or legacy SSE; --transport auto|sse|streamable)
+./target/release/mcp2cli --mcp http://127.0.0.1:8000/mcp --list
+./target/release/mcp2cli --mcp http://127.0.0.1:8000/sse --transport sse echo --message hi
 ```
 
-**M1 status:** OpenAPI + MCP stdio + list/search/output flags + bake/`@name`. Still deferred: MCP HTTP, OAuth, GraphQL, sessions.
+**M1 status:** OpenAPI + MCP stdio/HTTP (streamable + legacy SSE) + list/search/output flags + bake/`@name`. Still deferred: OAuth, GraphQL, sessions.
 
 ### Bake mode
 
