@@ -15,7 +15,31 @@ cargo test
 ./target/release/mcp2cli --mcp-stdio "npx @modelcontextprotocol/server-filesystem /tmp" read-file --path /tmp/hello.txt
 ```
 
-**M1 status:** OpenAPI + MCP stdio + list/search/output flags. Still deferred: MCP HTTP, OAuth, GraphQL, bake/`@name`, sessions.
+**M1 status:** OpenAPI + MCP stdio + list/search/output flags + bake/`@name`. Still deferred: MCP HTTP, OAuth, GraphQL, sessions.
+
+### Bake mode
+
+```bash
+# Save connection settings
+./target/release/mcp2cli bake create petstore \
+  --spec ./tests/fixtures/petstore.json --methods GET,POST
+
+./target/release/mcp2cli bake create mytools \
+  --mcp-stdio "python3 ./tests/fixtures/mcp_test_server.py" --exclude deploy
+
+# Use without repeating connection flags
+./target/release/mcp2cli @petstore --list
+./target/release/mcp2cli @mytools echo --message hi
+
+# Manage
+./target/release/mcp2cli bake list
+./target/release/mcp2cli bake show petstore
+./target/release/mcp2cli bake update petstore --cache-ttl 7200
+./target/release/mcp2cli bake remove petstore
+./target/release/mcp2cli bake install mytools --dir ./scripts/
+```
+
+Configs are stored in `~/.config/mcp2cli/baked.json` (override with `MCP2CLI_CONFIG_DIR`).
 
 ## License
 

@@ -5,44 +5,54 @@ use std::ffi::OsString;
 use clap::Parser;
 use serde_json::{Map, Value};
 
+use crate::bake::require_baked;
 use crate::cache::cache_key_for;
 use crate::cli::args::GlobalArgs;
+use crate::cli::bake::handle_bake;
 use crate::cli::dynamic::{parse_tool_args, print_command_help, read_stdin_json};
 use crate::cli::list::{
     apply_list_options, filter_by_search, list_commands, ListOptions, ListStyle,
 };
 use crate::cli::{global_option_sets, split_at_subcommand};
 use crate::error::{Error, Result};
+use crate::filter::filter_commands;
 use crate::mcp::{call_tool_stdio, fetch_mcp_tools_stdio, tools_to_commands};
-use crate::openapi::{execute_openapi, extract_openapi_commands, load_openapi_spec, resolve_base_url};
+use crate::model::BakeConfig;
+use crate::openapi::{
+    execute_openapi, extract_openapi_commands, load_openapi_spec, resolve_base_url,
+};
 use crate::output::output_result;
 use crate::usage::{record_usage, source_hash_for};
 
 pub fn dispatch(argv: Vec<OsString>) -> Result<()> {
     if argv.first().and_then(|a| a.to_str()) == Some("bake") {
-        return Err(Error::runtime(
-            "bake subcommands are not implemented yet in this Rust port",
-        ));
+        return handle_bake(&argv[1..]);
     }
-    if argv
-        .first()
-        .and_then(|a| a.to_str())
-        .is_some_and(|s| s.starts_with('@'))
-    {
-        return Err(Error::runtime(
-            "@name baked tools are not implemented yet in this Rust port",
-        ));
+    if let Some(first) = argv.first().and_then(|a| a.to_str()) {
+        if let Some(name) = first.strip_prefix('@') {
+            return run_baked(name, &argv[1..]);
+        }
     }
 
+    dispatch_impl(argv, None)
+}
+
+fn run_baked(name: &str, rest: &[OsString]) -> Result<()> {
+    let cfg = require_baked(name)?;
+    let bake_config = cfg.bake_config();
+    let mut synthetic: Vec<OsString> = cfg.to_argv().into_iter().map(OsString::from).collect();
+    synthetic.extend_from_slice(rest);
+    dispatch_impl(synthetic, Some(bake_config))
+}
+
+fn dispatch_impl(argv: Vec<OsString>, bake_config: Option<BakeConfig>) -> Result<()> {
     let (value_opts, bool_opts) = global_option_sets();
     let (global_argv, tool_argv) = split_at_subcommand(&argv, &value_opts, &bool_opts);
 
-    // clap wants args without program name for try_parse_from when we pass iterator of flags only
     let mut clap_argv = vec![OsString::from("mcp2cli")];
     clap_argv.extend(global_argv);
 
     let mut pre_args = GlobalArgs::try_parse_from(&clap_argv).map_err(|e| {
-        // clap already formats nicely for help/version
         let msg = e.to_string();
         if msg.contains("help") || e.kind() == clap::error::ErrorKind::DisplayHelp {
             e.print().ok();
@@ -96,17 +106,32 @@ pub fn dispatch(argv: Vec<OsString>) -> Result<()> {
     }
 
     if let Some(cmd) = &pre_args.mcp_stdio {
-        return dispatch_mcp_stdio(&pre_args, cmd, &tool_argv);
+        return dispatch_mcp_stdio(&pre_args, cmd, &tool_argv, bake_config.as_ref());
     }
 
     if let Some(spec) = &pre_args.spec {
-        return dispatch_openapi(&pre_args, spec, &tool_argv);
+        return dispatch_openapi(&pre_args, spec, &tool_argv, bake_config.as_ref());
     }
 
     Err(Error::usage("no source mode selected"))
 }
 
-fn dispatch_openapi(pre: &GlobalArgs, spec_source: &str, remaining: &[String]) -> Result<()> {
+fn apply_bake_filter(
+    commands: Vec<crate::CommandDef>,
+    bake: Option<&BakeConfig>,
+) -> Vec<crate::CommandDef> {
+    match bake {
+        Some(b) => filter_commands(commands, &b.include, &b.exclude, &b.methods),
+        None => commands,
+    }
+}
+
+fn dispatch_openapi(
+    pre: &GlobalArgs,
+    spec_source: &str,
+    remaining: &[String],
+    bake: Option<&BakeConfig>,
+) -> Result<()> {
     let auth = pre.parse_auth_headers()?;
     let src_hash = source_hash_for(spec_source);
     let spec = load_openapi_spec(
@@ -117,6 +142,7 @@ fn dispatch_openapi(pre: &GlobalArgs, spec_source: &str, remaining: &[String]) -
         pre.refresh,
     )?;
     let mut commands = extract_openapi_commands(&spec);
+    commands = apply_bake_filter(commands, bake);
 
     let list_opts = ListOptions {
         verbose: pre.verbose,
@@ -168,7 +194,12 @@ fn dispatch_openapi(pre: &GlobalArgs, spec_source: &str, remaining: &[String]) -
     Ok(())
 }
 
-fn dispatch_mcp_stdio(pre: &GlobalArgs, command_str: &str, remaining: &[String]) -> Result<()> {
+fn dispatch_mcp_stdio(
+    pre: &GlobalArgs,
+    command_str: &str,
+    remaining: &[String],
+    bake: Option<&BakeConfig>,
+) -> Result<()> {
     let env_vars = pre.parse_env_vars()?;
     let src_hash = source_hash_for(command_str);
     let cache_key = pre.cache_key.clone().unwrap_or_else(|| {
@@ -200,7 +231,7 @@ fn dispatch_mcp_stdio(pre: &GlobalArgs, command_str: &str, remaining: &[String])
             pre.cache_ttl,
             pre.refresh,
         ))?;
-        let mut commands = tools_to_commands(&tools);
+        let mut commands = apply_bake_filter(tools_to_commands(&tools), bake);
         if let Some(pat) = &pre.search_pattern {
             commands = filter_by_search(commands, pat);
             if commands.is_empty() {
@@ -228,7 +259,7 @@ fn dispatch_mcp_stdio(pre: &GlobalArgs, command_str: &str, remaining: &[String])
         pre.cache_ttl,
         pre.refresh,
     ))?;
-    let commands = tools_to_commands(&tools);
+    let commands = apply_bake_filter(tools_to_commands(&tools), bake);
 
     if remaining.is_empty() {
         if !pre.compact && !pre.json_output {

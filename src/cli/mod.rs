@@ -1,6 +1,7 @@
 //! CLI parsing helpers (two-pass argv split) and dispatch.
 
 pub mod args;
+pub mod bake;
 pub mod dispatch;
 pub mod dynamic;
 pub mod list;
