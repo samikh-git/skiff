@@ -17,9 +17,19 @@ cargo test
 # MCP HTTP (streamable or legacy SSE; --transport auto|sse|streamable)
 ./target/release/mcp2cli --mcp http://127.0.0.1:8000/mcp --list
 ./target/release/mcp2cli --mcp http://127.0.0.1:8000/sse --transport sse echo --message hi
+
+# OAuth (MCP HTTP / OpenAPI URL fetch; not with --mcp-stdio)
+./target/release/mcp2cli --mcp https://mcp.example.com/mcp --oauth --list
+./target/release/mcp2cli --mcp https://mcp.example.com/mcp \
+  --oauth-client-id env:OAUTH_CLIENT_ID \
+  --oauth-client-secret env:OAUTH_CLIENT_SECRET \
+  --oauth-flow client_credentials --list
+./target/release/mcp2cli --mcp https://mcp.example.com/mcp --oauth-clear
 ```
 
-**M1 status:** OpenAPI + MCP stdio/HTTP (streamable + legacy SSE) + list/search/output flags + bake/`@name`. Still deferred: OAuth, GraphQL, sessions.
+Tokens cache under `~/.cache/mcp2cli/oauth/` (override with `MCP2CLI_CACHE_DIR`). Prefer streamable HTTP for OAuth; legacy SSE injects a Bearer at connect time only (no mid-stream refresh).
+
+**M1 status:** OpenAPI + MCP stdio/HTTP (streamable + legacy SSE) + OAuth + list/search/output flags + bake/`@name`. Still deferred: GraphQL, sessions.
 
 ### Bake mode
 

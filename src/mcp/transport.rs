@@ -5,6 +5,7 @@ use serde_json::{Map, Value};
 use crate::error::{Error, Result};
 use crate::mcp::http::{call_tool_http, fetch_mcp_tools_http};
 use crate::mcp::sse::{call_tool_sse, fetch_mcp_tools_sse};
+use crate::oauth::OAuthReady;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportMode {
@@ -33,18 +34,21 @@ pub async fn fetch_mcp_tools(
     ttl: u64,
     refresh: bool,
     transport: TransportMode,
+    oauth: Option<&OAuthReady>,
 ) -> Result<Vec<Value>> {
     match transport {
         TransportMode::Streamable => {
-            fetch_mcp_tools_http(url, auth_headers, cache_key, ttl, refresh).await
+            fetch_mcp_tools_http(url, auth_headers, cache_key, ttl, refresh, oauth).await
         }
-        TransportMode::Sse => fetch_mcp_tools_sse(url, auth_headers, cache_key, ttl, refresh).await,
+        TransportMode::Sse => {
+            fetch_mcp_tools_sse(url, auth_headers, cache_key, ttl, refresh, oauth).await
+        }
         TransportMode::Auto => {
-            match fetch_mcp_tools_http(url, auth_headers, cache_key, ttl, refresh).await {
+            match fetch_mcp_tools_http(url, auth_headers, cache_key, ttl, refresh, oauth).await {
                 Ok(tools) => Ok(tools),
                 Err(streamable_err) => {
                     tracing::debug!("streamable HTTP failed, trying SSE: {streamable_err}");
-                    fetch_mcp_tools_sse(url, auth_headers, cache_key, ttl, refresh)
+                    fetch_mcp_tools_sse(url, auth_headers, cache_key, ttl, refresh, oauth)
                         .await
                         .map_err(|sse_err| {
                             Error::runtime(format!(
@@ -64,22 +68,30 @@ pub async fn call_tool(
     arguments: Map<String, Value>,
     full_envelope: bool,
     transport: TransportMode,
+    oauth: Option<&OAuthReady>,
 ) -> Result<Value> {
     match transport {
         TransportMode::Streamable => {
-            call_tool_http(url, auth_headers, tool_name, arguments, full_envelope).await
+            call_tool_http(url, auth_headers, tool_name, arguments, full_envelope, oauth).await
         }
         TransportMode::Sse => {
-            call_tool_sse(url, auth_headers, tool_name, arguments, full_envelope).await
+            call_tool_sse(url, auth_headers, tool_name, arguments, full_envelope, oauth).await
         }
         TransportMode::Auto => {
-            match call_tool_http(url, auth_headers, tool_name, arguments.clone(), full_envelope)
-                .await
+            match call_tool_http(
+                url,
+                auth_headers,
+                tool_name,
+                arguments.clone(),
+                full_envelope,
+                oauth,
+            )
+            .await
             {
                 Ok(v) => Ok(v),
                 Err(streamable_err) => {
                     tracing::debug!("streamable call failed, trying SSE: {streamable_err}");
-                    call_tool_sse(url, auth_headers, tool_name, arguments, full_envelope)
+                    call_tool_sse(url, auth_headers, tool_name, arguments, full_envelope, oauth)
                         .await
                         .map_err(|sse_err| {
                             Error::runtime(format!(

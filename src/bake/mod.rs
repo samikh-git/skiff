@@ -199,20 +199,26 @@ impl BakedTool {
                 if let Some(arr) = entry.as_array_mut() {
                     if arr.len() >= 2 {
                         if let Some(val) = arr[1].as_str() {
-                            let masked = if val.starts_with("env:") || val.starts_with("file:") {
-                                val.to_string()
-                            } else if val.len() > 4 {
-                                format!("{}****", &val[..4])
-                            } else {
-                                "****".into()
-                            };
-                            arr[1] = Value::String(masked);
+                            arr[1] = Value::String(mask_secret(val));
                         }
                     }
                 }
             }
         }
+        if let Some(Value::String(sec)) = display.get_mut("oauth_client_secret") {
+            *sec = mask_secret(sec);
+        }
         display
+    }
+}
+
+fn mask_secret(val: &str) -> String {
+    if val.starts_with("env:") || val.starts_with("file:") {
+        val.to_string()
+    } else if val.len() > 4 {
+        format!("{}****", &val[..4])
+    } else {
+        "****".into()
     }
 }
 

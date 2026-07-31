@@ -21,6 +21,10 @@ use crate::mcp::{
     TransportMode,
 };
 use crate::model::BakeConfig;
+use crate::oauth::{
+    clear_oauth_credentials, discovery_url_from_args, oauth_wanted, options_from_args,
+    setup_from_args, OAuthReady,
+};
 use crate::openapi::{
     execute_openapi, extract_openapi_commands, load_openapi_spec, resolve_base_url,
 };
@@ -72,6 +76,17 @@ fn dispatch_impl(argv: Vec<OsString>, bake_config: Option<BakeConfig>) -> Result
         pre_args.list_commands = true;
     }
 
+    // --oauth-clear can run with just a discovery URL source flag.
+    if pre_args.oauth_clear {
+        let url = discovery_url_from_args(&pre_args)?;
+        clear_oauth_credentials(&url)?;
+        println!("Cleared OAuth credentials for {url}");
+        return Ok(());
+    }
+
+    // Validate oauth flags early (e.g. secret without id, stdio+oauth).
+    let _ = options_from_args(&pre_args)?;
+
     let tool_argv: Vec<String> = tool_argv
         .iter()
         .map(|a| a.to_string_lossy().into_owned())
@@ -102,12 +117,17 @@ fn dispatch_impl(argv: Vec<OsString>, bake_config: Option<BakeConfig>) -> Result
         ));
     }
 
-    if let Some(url) = &pre_args.mcp {
-        return dispatch_mcp_http(&pre_args, url, &tool_argv, bake_config.as_ref());
+    if let Some(cmd) = &pre_args.mcp_stdio {
+        if oauth_wanted(&pre_args) {
+            return Err(Error::usage(
+                "OAuth is not supported with --mcp-stdio (HTTP discovery required)",
+            ));
+        }
+        return dispatch_mcp_stdio(&pre_args, cmd, &tool_argv, bake_config.as_ref());
     }
 
-    if let Some(cmd) = &pre_args.mcp_stdio {
-        return dispatch_mcp_stdio(&pre_args, cmd, &tool_argv, bake_config.as_ref());
+    if let Some(url) = &pre_args.mcp {
+        return dispatch_mcp_http(&pre_args, url, &tool_argv, bake_config.as_ref());
     }
 
     if let Some(spec) = &pre_args.spec {
@@ -133,7 +153,18 @@ fn dispatch_openapi(
     remaining: &[String],
     bake: Option<&BakeConfig>,
 ) -> Result<()> {
-    let auth = pre.parse_auth_headers()?;
+    let mut auth = pre.parse_auth_headers()?;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| Error::runtime(e.to_string()))?;
+    let oauth = rt.block_on(setup_from_args(pre))?;
+    if let Some(ref o) = oauth {
+        let token = rt.block_on(o.access_token())?;
+        auth.retain(|(k, _)| !k.eq_ignore_ascii_case("authorization"));
+        auth.push(("Authorization".into(), format!("Bearer {token}")));
+    }
+
     let src_hash = source_hash_for(spec_source);
     let spec = load_openapi_spec(
         spec_source,
@@ -218,6 +249,9 @@ fn dispatch_mcp_http(
         .build()
         .map_err(|e| Error::runtime(e.to_string()))?;
 
+    let oauth: Option<OAuthReady> = rt.block_on(setup_from_args(pre))?;
+    let oauth_ref = oauth.as_ref();
+
     let list_opts = ListOptions {
         verbose: pre.verbose,
         compact: pre.compact,
@@ -234,6 +268,7 @@ fn dispatch_mcp_http(
             pre.cache_ttl,
             pre.refresh,
             transport,
+            oauth_ref,
         ))?;
         let mut commands = apply_bake_filter(tools_to_commands(&tools), bake);
         if let Some(pat) = &pre.search_pattern {
@@ -263,6 +298,7 @@ fn dispatch_mcp_http(
         pre.cache_ttl,
         pre.refresh,
         transport,
+        oauth_ref,
     ))?;
     let commands = apply_bake_filter(tools_to_commands(&tools), bake);
 
@@ -319,6 +355,7 @@ fn dispatch_mcp_http(
         arguments,
         pre.json_output,
         transport,
+        oauth_ref,
     ))?;
     output_result(data, &pre.output_options())?;
     let _ = record_usage(&src_hash, &tool_name);

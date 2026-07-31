@@ -14,6 +14,7 @@ use crate::error::{Error, Result};
 use crate::mcp::common::{
     auth_headers_to_http, call_tool_on, list_tools_on, McpClient,
 };
+use crate::oauth::OAuthReady;
 
 pub async fn fetch_mcp_tools_http(
     url: &str,
@@ -21,6 +22,7 @@ pub async fn fetch_mcp_tools_http(
     cache_key: &str,
     ttl: u64,
     refresh: bool,
+    oauth: Option<&OAuthReady>,
 ) -> Result<Vec<Value>> {
     let tools_key = format!("{cache_key}_tools");
     if !refresh {
@@ -31,7 +33,7 @@ pub async fn fetch_mcp_tools_http(
         }
     }
 
-    let tools = list_tools_http(url, auth_headers).await?;
+    let tools = list_tools_http(url, auth_headers, oauth).await?;
     save_cache(&tools_key, &Value::Array(tools.clone()))?;
     Ok(tools)
 }
@@ -39,8 +41,9 @@ pub async fn fetch_mcp_tools_http(
 pub async fn list_tools_http(
     url: &str,
     auth_headers: &[(String, String)],
+    oauth: Option<&OAuthReady>,
 ) -> Result<Vec<Value>> {
-    let client = connect_streamable(url, auth_headers).await?;
+    let client = connect_streamable(url, auth_headers, oauth).await?;
     let tools = list_tools_on(&client).await?;
     let _ = client.cancel().await;
     Ok(tools)
@@ -52,8 +55,9 @@ pub async fn call_tool_http(
     tool_name: &str,
     arguments: Map<String, Value>,
     full_envelope: bool,
+    oauth: Option<&OAuthReady>,
 ) -> Result<Value> {
-    let client = connect_streamable(url, auth_headers).await?;
+    let client = connect_streamable(url, auth_headers, oauth).await?;
     let result = call_tool_on(&client, tool_name, arguments, full_envelope).await?;
     let _ = client.cancel().await;
     Ok(result)
@@ -62,10 +66,18 @@ pub async fn call_tool_http(
 pub async fn connect_streamable(
     url: &str,
     auth_headers: &[(String, String)],
+    oauth: Option<&OAuthReady>,
 ) -> Result<McpClient> {
-    let custom_headers = auth_headers_to_http(auth_headers)?;
-    let config =
-        StreamableHttpClientTransportConfig::with_uri(Arc::<str>::from(url)).custom_headers(custom_headers);
+    let mut headers = auth_headers.to_vec();
+    if let Some(oauth) = oauth {
+        // Refresh-aware access token; inject as Bearer for this one-shot connection.
+        let token = oauth.access_token().await?;
+        headers.retain(|(k, _)| !k.eq_ignore_ascii_case("authorization"));
+        headers.push(("Authorization".into(), format!("Bearer {token}")));
+    }
+    let custom_headers = auth_headers_to_http(&headers)?;
+    let config = StreamableHttpClientTransportConfig::with_uri(Arc::<str>::from(url))
+        .custom_headers(custom_headers);
 
     let transport = StreamableHttpClientTransport::from_config(config);
     tokio::time::timeout(Duration::from_secs(30), ().serve(transport))

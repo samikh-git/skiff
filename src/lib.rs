@@ -10,6 +10,7 @@ pub mod error;
 pub mod filter;
 pub mod mcp;
 pub mod model;
+pub mod oauth;
 pub mod openapi;
 pub mod output;
 pub mod paths;

@@ -104,6 +104,38 @@ pub struct GlobalArgs {
     /// Env KEY=VALUE for MCP stdio (repeatable)
     #[arg(long = "env", value_name = "KEY=VALUE")]
     pub env: Vec<String>,
+
+    /// Enable OAuth (also implied by --oauth-client-id / --oauth-client-secret)
+    #[arg(long)]
+    pub oauth: bool,
+
+    /// OAuth client ID (supports env:/file: secrets)
+    #[arg(long)]
+    pub oauth_client_id: Option<String>,
+
+    /// OAuth client secret (supports env:/file: secrets)
+    #[arg(long)]
+    pub oauth_client_secret: Option<String>,
+
+    /// OAuth client name for DCR
+    #[arg(long, default_value = "mcp2cli")]
+    pub oauth_client_name: String,
+
+    /// OAuth scope string
+    #[arg(long)]
+    pub oauth_scope: Option<String>,
+
+    /// Loopback redirect URI (http://127.0.0.1:<port>/callback)
+    #[arg(long)]
+    pub oauth_redirect_uri: Option<String>,
+
+    /// OAuth flow: auto|authorization_code|client_credentials
+    #[arg(long, default_value = "auto", value_parser = ["auto", "authorization_code", "client_credentials"])]
+    pub oauth_flow: String,
+
+    /// Clear cached OAuth credentials for the discovery URL and exit
+    #[arg(long = "oauth-clear")]
+    pub oauth_clear: bool,
 }
 
 impl GlobalArgs {

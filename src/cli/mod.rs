@@ -88,6 +88,7 @@ pub fn global_option_sets() -> (HashSet<String>, HashSet<String>) {
         "--json",
         "--toon",
         "--oauth",
+        "--oauth-clear",
         "--list-resources",
         "--list-resource-templates",
         "--list-prompts",

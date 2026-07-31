@@ -210,6 +210,17 @@ fn bake_create(args: CreateArgs) -> Result<()> {
         ..Default::default()
     };
 
+    if let Some(sec) = &tool.oauth_client_secret {
+        if !sec.starts_with("env:") && !sec.starts_with("file:") {
+            use std::io::IsTerminal;
+            if std::io::stdout().is_terminal() {
+                eprintln!(
+                    "warning: --oauth-client-secret is a literal value; prefer env:VAR or file:PATH so secrets stay off the process list and bake config"
+                );
+            }
+        }
+    }
+
     create_baked(&args.name, tool, args.force)?;
     println!("Baked tool '{}' created.", args.name);
     Ok(())
