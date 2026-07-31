@@ -6,9 +6,14 @@ mod sse;
 mod stdio;
 mod transport;
 
-pub use common::tools_to_commands;
-pub use stdio::{call_tool_stdio, fetch_mcp_tools_stdio};
-pub use transport::{call_tool as call_tool_http, fetch_mcp_tools as fetch_mcp_tools_http, TransportMode};
+pub use common::{call_tool_on, list_tools_on, tools_to_commands, McpClient};
+pub use http::connect_streamable;
+pub use sse::connect_sse;
+pub use stdio::{call_tool_stdio, connect_stdio, connect_stdio_with, fetch_mcp_tools_stdio};
+pub use transport::{
+    call_tool as call_tool_http, connect_http, fetch_mcp_tools as fetch_mcp_tools_http,
+    TransportMode,
+};
 
 use serde_json::Value;
 

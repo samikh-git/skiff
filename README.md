@@ -23,6 +23,18 @@ cargo test
 ./target/release/mcp2cli --graphql http://127.0.0.1:4000 user --id 1
 ./target/release/mcp2cli --graphql http://127.0.0.1:4000 --fields "id name" user --id 1
 
+# MCP sessions (reuse a warm connection)
+./target/release/mcp2cli --mcp-stdio "python3 ./tests/fixtures/mcp_test_server.py" --session-start myfs
+./target/release/mcp2cli --session myfs --list
+./target/release/mcp2cli --session myfs echo --message hi
+./target/release/mcp2cli --session myfs --list-resources
+./target/release/mcp2cli --session-list --json
+./target/release/mcp2cli --session-stop myfs
+```
+
+Sessions keep one long-lived MCP client behind a Unix-domain socket (`$MCP2CLI_CACHE_DIR/sessions/{name}.{sock,json,log}`). Socket mode is `0o600` with same-UID peer checks; start config is written as a `0o600` file (not argv) and unlinked by the daemon. Idle timeout defaults to 30 minutes (`--session-idle-secs` / `MCP2CLI_SESSION_IDLE_SECS`; `0` disables). Bake with `--session NAME` so `@name` reuses the warm daemon.
+
+```bash
 # OAuth (MCP HTTP / OpenAPI URL fetch / GraphQL; not with --mcp-stdio)
 ./target/release/mcp2cli --mcp https://mcp.example.com/mcp --oauth --list
 ./target/release/mcp2cli --mcp https://mcp.example.com/mcp \
@@ -34,7 +46,7 @@ cargo test
 
 Tokens cache under `~/.cache/mcp2cli/oauth/` (override with `MCP2CLI_CACHE_DIR`). Prefer streamable HTTP for OAuth; legacy SSE injects a Bearer at connect time only (no mid-stream refresh). GraphQL introspection caches under `~/.cache/mcp2cli/` like OpenAPI.
 
-**M1 status:** OpenAPI + MCP stdio/HTTP (streamable + legacy SSE) + OAuth + GraphQL + list/search/output flags + bake/`@name`. Still deferred: sessions.
+**M1 status:** OpenAPI + MCP stdio/HTTP (streamable + legacy SSE) + OAuth + GraphQL + named session daemons + list/search/output flags + bake/`@name`.
 
 ### Bake mode
 
@@ -44,11 +56,12 @@ Tokens cache under `~/.cache/mcp2cli/oauth/` (override with `MCP2CLI_CACHE_DIR`)
   --spec ./tests/fixtures/petstore.json --methods GET,POST
 
 ./target/release/mcp2cli bake create mytools \
-  --mcp-stdio "python3 ./tests/fixtures/mcp_test_server.py" --exclude deploy
+  --mcp-stdio "python3 ./tests/fixtures/mcp_test_server.py" --exclude deploy --session myfs
 
 # Use without repeating connection flags
 ./target/release/mcp2cli @petstore --list
 ./target/release/mcp2cli @mytools echo --message hi
+# (after --session-start myfs, @mytools hits the warm daemon)
 
 # Manage
 ./target/release/mcp2cli bake list

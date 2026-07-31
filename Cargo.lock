@@ -971,6 +971,7 @@ dependencies = [
  "futures",
  "hex",
  "http",
+ "libc",
  "open",
  "predicates",
  "regex",

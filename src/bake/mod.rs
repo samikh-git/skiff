@@ -49,6 +49,9 @@ pub struct BakedTool {
     pub oauth_redirect_uri: Option<String>,
     #[serde(default = "default_oauth_flow", skip_serializing_if = "is_default_oauth_flow")]
     pub oauth_flow: String,
+    /// Prefer routing through this named session daemon when present
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
     #[serde(default)]
     pub include: Vec<String>,
     #[serde(default)]
@@ -103,6 +106,7 @@ impl Default for BakedTool {
             oauth_scope: None,
             oauth_redirect_uri: None,
             oauth_flow: default_oauth_flow(),
+            session: None,
             include: Vec::new(),
             exclude: Vec::new(),
             methods: Vec::new(),
@@ -191,6 +195,10 @@ impl BakedTool {
         if self.oauth_flow != "auto" {
             argv.push("--oauth-flow".into());
             argv.push(self.oauth_flow.clone());
+        }
+        if let Some(sess) = &self.session {
+            argv.push("--session".into());
+            argv.push(sess.clone());
         }
         argv
     }
@@ -500,6 +508,18 @@ mod tests {
         let argv = cfg.to_argv();
         let idx = argv.iter().position(|a| a == "--oauth-redirect-uri").unwrap();
         assert_eq!(argv[idx + 1], uri);
+    }
+
+    #[test]
+    fn baked_to_argv_session() {
+        let cfg = BakedTool {
+            source_type: "mcp_stdio".into(),
+            source: "python3 server.py".into(),
+            session: Some("warm".into()),
+            ..Default::default()
+        };
+        let argv = cfg.to_argv();
+        assert!(argv.windows(2).any(|w| w == ["--session", "warm"]));
     }
 
     #[test]

@@ -76,6 +76,9 @@ struct CreateArgs {
     oauth_redirect_uri: Option<String>,
     #[arg(long, default_value = "auto", value_parser = ["auto", "authorization_code", "client_credentials"])]
     oauth_flow: String,
+    /// Prefer this named session when using @name
+    #[arg(long)]
+    session: Option<String>,
     #[arg(long, default_value = "")]
     include: String,
     #[arg(long, default_value = "")]
@@ -208,6 +211,7 @@ fn bake_create(args: CreateArgs) -> Result<()> {
         oauth_scope: args.oauth_scope,
         oauth_redirect_uri: args.oauth_redirect_uri,
         oauth_flow: args.oauth_flow,
+        session: args.session,
         include: split_csv_list(&args.include),
         exclude: split_csv_list(&args.exclude),
         methods: split_methods(&args.methods),

@@ -58,9 +58,19 @@ pub async fn call_tool_stdio(
     Ok(result)
 }
 
-async fn connect_stdio(
+pub async fn connect_stdio(
     command_str: &str,
     env_vars: &BTreeMap<String, String>,
+) -> Result<McpClient> {
+    connect_stdio_with(command_str, env_vars, false).await
+}
+
+/// Connect to an MCP stdio server. When `clean_env` is true, clear the child
+/// environment and keep only PATH/HOME/LANG plus `env_vars`.
+pub async fn connect_stdio_with(
+    command_str: &str,
+    env_vars: &BTreeMap<String, String>,
+    clean_env: bool,
 ) -> Result<McpClient> {
     let parts = shell_words::split(command_str)
         .map_err(|e| Error::runtime(format!("invalid --mcp-stdio command: {e}")))?;
@@ -70,6 +80,14 @@ async fn connect_stdio(
 
     let transport = TokioChildProcess::new(Command::new(&parts[0]).configure(|c| {
         c.args(&parts[1..]).kill_on_drop(true);
+        if clean_env {
+            c.env_clear();
+            for key in ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TMP", "TEMP"] {
+                if let Ok(v) = std::env::var(key) {
+                    c.env(key, v);
+                }
+            }
+        }
         for (k, v) in env_vars {
             c.env(k, v);
         }

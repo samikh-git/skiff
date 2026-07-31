@@ -93,6 +93,33 @@ fn dispatch_impl(argv: Vec<OsString>, bake_config: Option<BakeConfig>) -> Result
         .map(|a| a.to_string_lossy().into_owned())
         .collect();
 
+    // Session management that does not require a source mode.
+    #[cfg(unix)]
+    {
+        if pre_args.session_list {
+            return dispatch_session_list(&pre_args);
+        }
+        if let Some(name) = &pre_args.session_stop {
+            return crate::session::session_stop(name);
+        }
+        if let Some(name) = &pre_args.session_start {
+            return dispatch_session_start(&pre_args, name);
+        }
+        if let Some(name) = &pre_args.session {
+            return dispatch_session(&pre_args, name, &tool_argv, bake_config.as_ref());
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        if pre_args.session_list
+            || pre_args.session_stop.is_some()
+            || pre_args.session_start.is_some()
+            || pre_args.session.is_some()
+        {
+            return Err(crate::session::sessions_unsupported());
+        }
+    }
+
     let modes = [
         pre_args.spec.is_some(),
         pre_args.mcp.is_some(),
@@ -582,6 +609,221 @@ fn dispatch_mcp_stdio(
     Ok(())
 }
 
+#[cfg(unix)]
+fn dispatch_session_list(pre: &GlobalArgs) -> Result<()> {
+    let entries = crate::session::session_list()?;
+    if pre.json_output {
+        let v = serde_json::to_value(&entries)?;
+        output_result(v, &pre.output_options())?;
+        return Ok(());
+    }
+    if entries.is_empty() {
+        println!("No sessions.");
+        return Ok(());
+    }
+    for e in entries {
+        let status = if e.alive { "alive" } else { "dead" };
+        println!(
+            "  {:<20} {status:<6} pid={}  {} ({})",
+            e.name, e.pid, e.transport, e.source
+        );
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn dispatch_session_start(pre: &GlobalArgs, name: &str) -> Result<()> {
+    let (source, is_stdio) = if let Some(cmd) = &pre.mcp_stdio {
+        if oauth_wanted(pre) {
+            return Err(Error::usage(
+                "OAuth is not supported with --mcp-stdio (HTTP discovery required)",
+            ));
+        }
+        (cmd.clone(), true)
+    } else if let Some(url) = &pre.mcp {
+        (url.clone(), false)
+    } else {
+        return Err(Error::usage(
+            "--session-start requires --mcp or --mcp-stdio",
+        ));
+    };
+
+    let mut auth = pre.parse_auth_headers()?;
+    if !is_stdio && oauth_wanted(pre) {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| Error::runtime(e.to_string()))?;
+        if let Some(o) = rt.block_on(setup_from_args(pre))? {
+            let token = rt.block_on(o.access_token())?;
+            auth.retain(|(k, _)| !k.eq_ignore_ascii_case("authorization"));
+            auth.push(("Authorization".into(), format!("Bearer {token}")));
+        }
+    }
+
+    let idle_secs = crate::session::resolve_idle_secs(pre.session_idle_secs);
+    let config = crate::session::DaemonConfig {
+        name: name.to_string(),
+        source,
+        is_stdio,
+        auth_headers: auth,
+        env_vars: pre.parse_env_vars()?,
+        transport: pre.transport.clone(),
+        clean_env: pre.session_clean_env,
+        idle_secs,
+    };
+    crate::session::session_start(config)
+}
+
+#[cfg(unix)]
+fn dispatch_session(
+    pre: &GlobalArgs,
+    name: &str,
+    remaining: &[String],
+    bake: Option<&BakeConfig>,
+) -> Result<()> {
+    let _ = crate::session::clear_stale_session(name)?;
+    if !crate::session::session_sock_path(name).exists() {
+        return Err(Error::runtime(format!(
+            "session {name:?} is not running. Start with --session-start {name}"
+        )));
+    }
+
+    if pre.list_resources {
+        let v = crate::session::session_request(name, "list_resources", Value::Null)?;
+        output_result(v, &pre.output_options())?;
+        return Ok(());
+    }
+    if pre.list_resource_templates {
+        let v = crate::session::session_request(name, "list_resource_templates", Value::Null)?;
+        output_result(v, &pre.output_options())?;
+        return Ok(());
+    }
+    if let Some(uri) = &pre.read_resource {
+        let v = crate::session::session_request(
+            name,
+            "read_resource",
+            serde_json::json!({ "uri": uri }),
+        )?;
+        output_result(v, &pre.output_options())?;
+        return Ok(());
+    }
+    if pre.list_prompts {
+        let v = crate::session::session_request(name, "list_prompts", Value::Null)?;
+        output_result(v, &pre.output_options())?;
+        return Ok(());
+    }
+    if let Some(pname) = &pre.get_prompt {
+        let mut args = Map::new();
+        for item in &pre.prompt_arg {
+            let Some((k, v)) = item.split_once('=') else {
+                return Err(Error::usage(format!(
+                    "invalid --prompt-arg {item:?}; expected KEY=VALUE"
+                )));
+            };
+            args.insert(k.to_string(), Value::String(v.to_string()));
+        }
+        let v = crate::session::session_request(
+            name,
+            "get_prompt",
+            serde_json::json!({ "name": pname, "arguments": args }),
+        )?;
+        output_result(v, &pre.output_options())?;
+        return Ok(());
+    }
+
+    let tools_val = crate::session::session_request(
+        name,
+        "list_tools",
+        serde_json::json!({ "refresh": pre.refresh }),
+    )?;
+    let tools = tools_val
+        .as_array()
+        .cloned()
+        .ok_or_else(|| Error::runtime("session list_tools did not return an array"))?;
+    let mut commands = apply_bake_filter(tools_to_commands(&tools), bake);
+    let src_hash = source_hash_for(&format!("session:{name}"));
+
+    let list_opts = ListOptions {
+        verbose: pre.verbose,
+        compact: pre.compact,
+        json_output: pre.json_output,
+        pretty: pre.pretty,
+        style: ListStyle::Mcp,
+    };
+
+    if pre.list_commands {
+        if let Some(pat) = &pre.search_pattern {
+            commands = filter_by_search(commands, pat);
+            if commands.is_empty() {
+                if pre.json_output {
+                    list_commands(&commands, &list_opts)?;
+                } else {
+                    println!("\nNo tools matching '{pat}'.");
+                }
+                return Ok(());
+            }
+            if !pre.compact && !pre.json_output {
+                println!("\nTools matching '{pat}':");
+            }
+        } else if !pre.compact && !pre.json_output {
+            println!("\nAvailable tools:");
+        }
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        return list_commands(&commands, &list_opts);
+    }
+
+    if remaining.is_empty() {
+        if !pre.compact && !pre.json_output {
+            println!("Available tools:");
+        }
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        list_commands(&commands, &list_opts)?;
+        if !pre.compact && !pre.json_output {
+            println!("\nUse --list for the same output, or provide a subcommand.");
+        }
+        return Ok(());
+    }
+
+    let parsed = match parse_tool_args(&commands, remaining) {
+        Err(Error::Usage(msg)) if msg == "__help__" => return Ok(()),
+        other => other?,
+    };
+
+    let arguments: Map<String, Value> = if parsed.stdin {
+        match read_stdin_json("MCP tool arguments")? {
+            Value::Object(map) => map,
+            other => {
+                return Err(Error::runtime(format!(
+                    "MCP --stdin expects a JSON object, got {}",
+                    other
+                )));
+            }
+        }
+    } else {
+        parsed.values.into_iter().collect()
+    };
+
+    let tool_name = parsed
+        .command
+        .tool_name
+        .clone()
+        .unwrap_or_else(|| parsed.command.name.clone());
+
+    let data = crate::session::session_request(
+        name,
+        "call_tool",
+        serde_json::json!({
+            "name": tool_name,
+            "arguments": arguments,
+            "full_envelope": pre.json_output,
+        }),
+    )?;
+    output_result(data, &pre.output_options())?;
+    let _ = record_usage(&src_hash, &tool_name);
+    Ok(())
+}
+
 fn print_help() {
     eprintln!(
         "\
@@ -592,6 +834,8 @@ Usage:
   mcp2cli --mcp <URL> [--list] [command]
   mcp2cli --mcp-stdio <CMD> [--list] [command]
   mcp2cli --graphql <URL> [--list] [command]
+  mcp2cli --mcp-stdio <CMD> --session-start <NAME>
+  mcp2cli --session <NAME> [--list] [command]
   mcp2cli bake <create|list|show|remove|update|install> ...
   mcp2cli @<name> ...
 ",

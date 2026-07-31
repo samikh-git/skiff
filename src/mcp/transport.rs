@@ -3,8 +3,9 @@
 use serde_json::{Map, Value};
 
 use crate::error::{Error, Result};
-use crate::mcp::http::{call_tool_http, fetch_mcp_tools_http};
-use crate::mcp::sse::{call_tool_sse, fetch_mcp_tools_sse};
+use crate::mcp::common::McpClient;
+use crate::mcp::http::{call_tool_http, connect_streamable, fetch_mcp_tools_http};
+use crate::mcp::sse::{call_tool_sse, connect_sse, fetch_mcp_tools_sse};
 use crate::oauth::OAuthReady;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,5 +102,31 @@ pub async fn call_tool(
                 }
             }
         }
+    }
+}
+
+/// Open a long-lived HTTP MCP client (for session daemons).
+pub async fn connect_http(
+    url: &str,
+    auth_headers: &[(String, String)],
+    transport: TransportMode,
+    oauth: Option<&OAuthReady>,
+) -> Result<McpClient> {
+    match transport {
+        TransportMode::Streamable => connect_streamable(url, auth_headers, oauth).await,
+        TransportMode::Sse => connect_sse(url, auth_headers, oauth).await,
+        TransportMode::Auto => match connect_streamable(url, auth_headers, oauth).await {
+            Ok(c) => Ok(c),
+            Err(streamable_err) => {
+                tracing::debug!("streamable connect failed, trying SSE: {streamable_err}");
+                connect_sse(url, auth_headers, oauth)
+                    .await
+                    .map_err(|sse_err| {
+                        Error::runtime(format!(
+                            "MCP connect failed (streamable: {streamable_err}; sse: {sse_err})"
+                        ))
+                    })
+            }
+        },
     }
 }

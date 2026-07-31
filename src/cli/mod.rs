@@ -73,6 +73,7 @@ pub fn global_option_sets() -> (HashSet<String>, HashSet<String>) {
         "--session-start",
         "--session-stop",
         "--session",
+        "--session-idle-secs",
     ]
     .into_iter()
     .map(str::to_string)
@@ -93,6 +94,7 @@ pub fn global_option_sets() -> (HashSet<String>, HashSet<String>) {
         "--list-resource-templates",
         "--list-prompts",
         "--session-list",
+        "--session-clean-env",
         "--version",
         "-V",
         "-h",

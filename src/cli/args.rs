@@ -136,6 +136,54 @@ pub struct GlobalArgs {
     /// Clear cached OAuth credentials for the discovery URL and exit
     #[arg(long = "oauth-clear")]
     pub oauth_clear: bool,
+
+    /// Start a persistent MCP session daemon
+    #[arg(long = "session-start", value_name = "NAME")]
+    pub session_start: Option<String>,
+
+    /// Route command through an existing session daemon
+    #[arg(long = "session", value_name = "NAME")]
+    pub session: Option<String>,
+
+    /// Stop a named session daemon
+    #[arg(long = "session-stop", value_name = "NAME")]
+    pub session_stop: Option<String>,
+
+    /// List session daemons
+    #[arg(long = "session-list")]
+    pub session_list: bool,
+
+    /// Idle timeout for session daemons in seconds (0 = never). Default 1800.
+    #[arg(long = "session-idle-secs", value_name = "SECS")]
+    pub session_idle_secs: Option<u64>,
+
+    /// Scrub inherited env for stdio session children (keep PATH/HOME/LANG + --env)
+    #[arg(long = "session-clean-env")]
+    pub session_clean_env: bool,
+
+    /// List MCP resources (session or ephemeral MCP)
+    #[arg(long = "list-resources")]
+    pub list_resources: bool,
+
+    /// List MCP resource templates
+    #[arg(long = "list-resource-templates")]
+    pub list_resource_templates: bool,
+
+    /// Read an MCP resource by URI
+    #[arg(long = "read-resource", value_name = "URI")]
+    pub read_resource: Option<String>,
+
+    /// List MCP prompts
+    #[arg(long = "list-prompts")]
+    pub list_prompts: bool,
+
+    /// Get an MCP prompt by name
+    #[arg(long = "get-prompt", value_name = "NAME")]
+    pub get_prompt: Option<String>,
+
+    /// Prompt argument as key=value (repeatable, with --get-prompt)
+    #[arg(long = "prompt-arg", value_name = "KEY=VALUE")]
+    pub prompt_arg: Vec<String>,
 }
 
 impl GlobalArgs {
