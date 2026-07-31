@@ -25,7 +25,7 @@ pub struct GlobalArgs {
     #[arg(long)]
     pub mcp_stdio: Option<String>,
 
-    /// GraphQL endpoint URL (deferred)
+    /// GraphQL endpoint URL
     #[arg(long)]
     pub graphql: Option<String>,
 

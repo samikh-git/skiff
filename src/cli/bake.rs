@@ -51,6 +51,8 @@ struct CreateArgs {
     #[arg(long)]
     mcp_stdio: Option<String>,
     #[arg(long)]
+    graphql: Option<String>,
+    #[arg(long)]
     base_url: Option<String>,
     #[arg(long = "auth-header", value_name = "Name:Value")]
     auth_header: Vec<String>,
@@ -167,16 +169,17 @@ fn bake_create(args: CreateArgs) -> Result<()> {
         args.spec.is_some(),
         args.mcp.is_some(),
         args.mcp_stdio.is_some(),
+        args.graphql.is_some(),
     ];
     let active = modes.iter().filter(|x| **x).count();
     if active == 0 {
         return Err(Error::usage(
-            "one of --spec, --mcp, or --mcp-stdio is required.",
+            "one of --spec, --mcp, --mcp-stdio, or --graphql is required.",
         ));
     }
     if active > 1 {
         return Err(Error::usage(
-            "--spec, --mcp, and --mcp-stdio are mutually exclusive.",
+            "--spec, --mcp, --mcp-stdio, and --graphql are mutually exclusive.",
         ));
     }
 
@@ -184,6 +187,8 @@ fn bake_create(args: CreateArgs) -> Result<()> {
         ("spec", s)
     } else if let Some(s) = args.mcp {
         ("mcp", s)
+    } else if let Some(s) = args.graphql {
+        ("graphql", s)
     } else {
         ("mcp_stdio", args.mcp_stdio.expect("checked above"))
     };

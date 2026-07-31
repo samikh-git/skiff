@@ -28,6 +28,7 @@ use crate::oauth::{
 use crate::openapi::{
     execute_openapi, extract_openapi_commands, load_openapi_spec, resolve_base_url,
 };
+use crate::graphql::{execute_graphql, extract_graphql_commands, load_graphql_schema};
 use crate::output::output_result;
 use crate::usage::{record_usage, source_hash_for};
 
@@ -111,12 +112,6 @@ fn dispatch_impl(argv: Vec<OsString>, bake_config: Option<BakeConfig>) -> Result
         ));
     }
 
-    if pre_args.graphql.is_some() {
-        return Err(Error::runtime(
-            "GraphQL mode is not implemented yet in this Rust port",
-        ));
-    }
-
     if let Some(cmd) = &pre_args.mcp_stdio {
         if oauth_wanted(&pre_args) {
             return Err(Error::usage(
@@ -132,6 +127,10 @@ fn dispatch_impl(argv: Vec<OsString>, bake_config: Option<BakeConfig>) -> Result
 
     if let Some(spec) = &pre_args.spec {
         return dispatch_openapi(&pre_args, spec, &tool_argv, bake_config.as_ref());
+    }
+
+    if let Some(url) = &pre_args.graphql {
+        return dispatch_graphql(&pre_args, url, &tool_argv, bake_config.as_ref());
     }
 
     Err(Error::usage("no source mode selected"))
@@ -223,6 +222,102 @@ fn dispatch_openapi(
 
     execute_openapi(&parsed, &base_url, &auth, &pre.output_options())?;
     let _ = record_usage(&src_hash, &parsed.command.name);
+    Ok(())
+}
+
+fn dispatch_graphql(
+    pre: &GlobalArgs,
+    url: &str,
+    remaining: &[String],
+    bake: Option<&BakeConfig>,
+) -> Result<()> {
+    let mut auth = pre.parse_auth_headers()?;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| Error::runtime(e.to_string()))?;
+    let oauth = rt.block_on(setup_from_args(pre))?;
+    if let Some(ref o) = oauth {
+        let token = rt.block_on(o.access_token())?;
+        auth.retain(|(k, _)| !k.eq_ignore_ascii_case("authorization"));
+        auth.push(("Authorization".into(), format!("Bearer {token}")));
+    }
+
+    let src_hash = source_hash_for(url);
+    let schema = load_graphql_schema(
+        url,
+        &auth,
+        pre.cache_key.as_deref(),
+        Some(pre.cache_ttl),
+        pre.refresh,
+    )?;
+    let mut commands = extract_graphql_commands(&schema);
+    commands = apply_bake_filter(commands, bake);
+
+    let list_opts = ListOptions {
+        verbose: pre.verbose,
+        compact: pre.compact,
+        json_output: pre.json_output,
+        pretty: pre.pretty,
+        style: ListStyle::Graphql,
+    };
+
+    if pre.list_commands {
+        if let Some(pat) = &pre.search_pattern {
+            commands = filter_by_search(commands, pat);
+            if commands.is_empty() {
+                if pre.json_output {
+                    list_commands(&commands, &list_opts)?;
+                } else {
+                    println!("\nNo tools matching '{pat}'.");
+                }
+                return Ok(());
+            }
+            if !pre.compact && !pre.json_output {
+                println!("\nTools matching '{pat}':");
+            }
+        }
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        return list_commands(&commands, &list_opts);
+    }
+
+    if remaining.is_empty() {
+        if !pre.compact && !pre.json_output {
+            println!("Available operations:");
+        }
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        list_commands(&commands, &list_opts)?;
+        if !pre.compact && !pre.json_output {
+            println!("\nUse --list for the same output, or provide a subcommand.");
+        }
+        return Ok(());
+    }
+
+    let parsed = match parse_tool_args(&commands, remaining) {
+        Err(Error::Usage(msg)) if msg == "__help__" => return Ok(()),
+        other => other?,
+    };
+    if remaining.get(1).map(String::as_str) == Some("--help")
+        || remaining.get(1).map(String::as_str) == Some("-h")
+    {
+        print_command_help(&parsed.command);
+        return Ok(());
+    }
+
+    execute_graphql(
+        &parsed,
+        url,
+        &schema,
+        &auth,
+        pre.fields.as_deref(),
+        &pre.output_options(),
+    )?;
+    let usage_key = parsed
+        .command
+        .graphql_field_name
+        .as_deref()
+        .unwrap_or(&parsed.command.name);
+    let _ = record_usage(&src_hash, usage_key);
     Ok(())
 }
 
@@ -490,12 +585,13 @@ fn dispatch_mcp_stdio(
 fn print_help() {
     eprintln!(
         "\
-mcp2cli {version} — Turn any MCP server or OpenAPI spec into a CLI
+mcp2cli {version} — Turn any MCP server, OpenAPI spec, or GraphQL endpoint into a CLI
 
 Usage:
   mcp2cli --spec <URL|FILE> [--list] [command]
   mcp2cli --mcp <URL> [--list] [command]
   mcp2cli --mcp-stdio <CMD> [--list] [command]
+  mcp2cli --graphql <URL> [--list] [command]
   mcp2cli bake <create|list|show|remove|update|install> ...
   mcp2cli @<name> ...
 ",

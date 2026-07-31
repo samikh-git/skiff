@@ -101,6 +101,37 @@ pub fn list_commands(
                 }
             }
         }
+        ListStyle::Graphql => {
+            let mut groups: std::collections::BTreeMap<&str, Vec<&CommandDef>> =
+                std::collections::BTreeMap::new();
+            for cmd in commands {
+                let key = cmd.graphql_operation_type.as_deref().unwrap_or("other");
+                groups.entry(key).or_default().push(cmd);
+            }
+            for group in ["query", "mutation"] {
+                let Some(cmds) = groups.get(group) else {
+                    continue;
+                };
+                if cmds.is_empty() {
+                    continue;
+                }
+                let label = if group == "query" {
+                    "queries"
+                } else {
+                    "mutations"
+                };
+                println!("\n{label}:");
+                for cmd in cmds {
+                    let desc =
+                        truncate_desc(&cmd.description, if opts.verbose { 10_000 } else { 60 });
+                    if desc.is_empty() {
+                        println!("  {:<40}", cmd.name);
+                    } else {
+                        println!("  {:<40}  {desc}", cmd.name);
+                    }
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -109,6 +140,7 @@ pub fn list_commands(
 pub enum ListStyle {
     Mcp,
     OpenApi,
+    Graphql,
 }
 
 #[derive(Debug, Clone)]

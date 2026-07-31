@@ -137,6 +137,10 @@ impl BakedTool {
                 argv.push("--mcp-stdio".into());
                 argv.push(self.source.clone());
             }
+            "graphql" => {
+                argv.push("--graphql".into());
+                argv.push(self.source.clone());
+            }
             other => {
                 // Unknown source types still emit a best-effort flag.
                 argv.push(format!("--{other}"));
