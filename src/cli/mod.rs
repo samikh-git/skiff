@@ -1,4 +1,11 @@
-//! CLI parsing helpers (two-pass argv split).
+//! CLI parsing helpers (two-pass argv split) and dispatch.
+
+pub mod args;
+pub mod dispatch;
+pub mod dynamic;
+pub mod list;
+
+pub use dispatch::dispatch;
 
 use std::collections::HashSet;
 use std::ffi::OsString;
@@ -85,6 +92,7 @@ pub fn global_option_sets() -> (HashSet<String>, HashSet<String>) {
         "--list-prompts",
         "--session-list",
         "--version",
+        "-V",
         "-h",
         "--help",
     ]

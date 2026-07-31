@@ -107,11 +107,13 @@ pub fn extract_openapi_commands(spec: &Value) -> Vec<CommandDef> {
                 .unwrap_or_else(|| Value::Object(Default::default()));
 
             let multipart_schema = rb_content
-                .pointer("/multipart/form-data/schema")
+                .get("multipart/form-data")
+                .and_then(|v| v.get("schema"))
                 .cloned()
                 .unwrap_or_else(|| Value::Object(Default::default()));
             let json_schema = rb_content
-                .pointer("/application/json/schema")
+                .get("application/json")
+                .and_then(|v| v.get("schema"))
                 .cloned()
                 .unwrap_or_else(|| Value::Object(Default::default()));
 

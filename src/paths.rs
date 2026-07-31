@@ -61,3 +61,8 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 pub const DEFAULT_CACHE_TTL: u64 = 3600;
+
+/// Shared lock so tests that override cache/config dirs don't race.
+#[cfg(test)]
+pub static TEST_PATHS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+

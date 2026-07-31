@@ -1,4 +1,8 @@
-//! MCP tool → CommandDef extraction (client/runtime wiring is feature-gated).
+//! MCP tool extraction and client transports.
+
+mod stdio;
+
+pub use stdio::{call_tool_stdio, fetch_mcp_tools_stdio, tools_to_commands};
 
 use serde_json::Value;
 

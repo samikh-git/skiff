@@ -1,8 +1,10 @@
-//! OpenAPI $ref resolution, command extraction, and (later) execution.
+//! OpenAPI $ref resolution, command extraction, and execution.
 
+mod execute;
 mod extract;
 mod refs;
 
+pub use execute::{execute_openapi, resolve_base_url};
 pub use extract::extract_openapi_commands;
 pub use refs::resolve_refs;
 

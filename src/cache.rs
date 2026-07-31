@@ -90,13 +90,10 @@ pub fn load_cached_default(key: &str) -> Result<Option<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::set_cache_dir_override;
+    use crate::paths::{set_cache_dir_override, TEST_PATHS_LOCK};
     use serde_json::json;
-    use std::sync::Mutex;
     use std::time::{Duration, SystemTime};
     use tempfile::tempdir;
-
-    static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn cache_key_deterministic_and_excludes_ttl() {
@@ -122,7 +119,7 @@ mod tests {
 
     #[test]
     fn cache_roundtrip_and_expiry() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = TEST_PATHS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempdir().unwrap();
         set_cache_dir_override(Some(dir.path().to_path_buf()));
 

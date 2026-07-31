@@ -121,17 +121,13 @@ pub fn usage_as_value() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::{set_cache_dir_override, set_config_dir_override};
-    use std::sync::Mutex;
+    use crate::paths::{set_cache_dir_override, set_config_dir_override, TEST_PATHS_LOCK};
     use tempfile::tempdir;
 
-    static TEST_LOCK: Mutex<()> = Mutex::new(());
-
     fn with_tmp_cache<F: FnOnce()>(f: F) {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = TEST_PATHS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempdir().unwrap();
         set_cache_dir_override(Some(dir.path().to_path_buf()));
-        // Ensure directory exists before any writes.
         std::fs::create_dir_all(dir.path()).unwrap();
         f();
         set_cache_dir_override(None);

@@ -30,6 +30,11 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 # Wired in subsequent milestones; keep in tree so feature work compiles early.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart", "blocking"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "signal", "time"] }
+rmcp = { version = "3.1", default-features = false, features = [
+    "client",
+    "transport-child-process",
+] }
+shell-words = "1"
 
 [dev-dependencies]
 assert_cmd = "2"
