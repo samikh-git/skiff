@@ -18,7 +18,8 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Install Python test deps
-        run: pip install "mcp>=1.0" uvicorn starlette httpx
+        # mcp 2.x removed Server.list_tools / decorator API used by fixtures
+        run: pip install "mcp>=1.0,<2" uvicorn starlette httpx
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
