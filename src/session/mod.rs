@@ -24,7 +24,7 @@ pub use daemon::run_session_daemon;
 #[cfg(unix)]
 pub use paths::{
     clear_stale_session, is_process_alive, session_is_alive, session_log_path, session_meta_path,
-    session_sock_path, sessions_dir, SessionMeta,
+    session_sock_path, sessions_dir, validate_session_name, SessionMeta,
 };
 #[cfg(unix)]
 pub use protocol::{SessionMethod, SessionRequest, SessionResponse};

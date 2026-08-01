@@ -296,9 +296,9 @@ impl GlobalArgs {
         let mut out = Vec::new();
         for item in &self.auth_header {
             let Some((k, v)) = item.split_once(':') else {
-                return Err(crate::error::Error::usage(format!(
-                    "invalid auth header format: {item:?}"
-                )));
+                return Err(crate::error::Error::usage(
+                    "invalid auth header format; expected Name:env:VAR or Name:file:/path",
+                ));
             };
             let v = crate::coerce::resolve_secret(v.trim())?;
             out.push((k.trim().to_string(), v));

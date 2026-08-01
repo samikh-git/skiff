@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::error::{Error, Result};
-use crate::session::paths::session_sock_path;
+use crate::session::paths::{session_sock_path, validate_session_name};
 use crate::session::protocol::{SessionRequest, SessionResponse};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -15,6 +15,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Send one NDJSON request to a named session daemon and return the result.
 pub fn session_request(name: &str, method: &str, params: Value) -> Result<Value> {
+    validate_session_name(name)?;
     let sock = session_sock_path(name);
     if !sock.exists() {
         return Err(Error::runtime(format!(
@@ -70,4 +71,14 @@ pub fn session_request(name: &str, method: &str, params: Value) -> Result<Value>
         return Err(Error::runtime(err));
     }
     Ok(resp.result.unwrap_or(Value::Null))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_invalid_session_name_before_connect() {
+        assert!(session_request("../other", "list_tools", Value::Null).is_err());
+    }
 }

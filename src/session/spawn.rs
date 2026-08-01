@@ -69,8 +69,7 @@ pub struct DaemonConfig {
     pub clean_env: bool,
     #[serde(default = "default_idle")]
     pub idle_secs: u64,
-    /// When set, the daemon re-authorizes from the credential store before RPC
-    /// and reconnects if the Bearer token rotates.
+    /// Refresh OAuth credentials before HTTP RPCs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oauth: Option<DaemonOAuthConfig>,
 }
@@ -91,8 +90,7 @@ pub fn session_start(config: DaemonConfig) -> Result<()> {
     }
 }
 
-/// RAII guard that releases the per-session start lock on drop, covering both
-/// early-return error paths and the success path.
+/// Releases the per-session start lock on every return path.
 struct SessionLockGuard<'a> {
     name: &'a str,
     released: bool,
@@ -118,10 +116,7 @@ fn session_start_unix(config: DaemonConfig) -> Result<()> {
     validate_session_name(&config.name)?;
     ensure_sessions_dir()?;
 
-    // Serialize the entire check-then-spawn sequence for this session name so
-    // two concurrent `session_start_unix` calls can't both pass the
-    // is-it-already-running check and race to spawn/bind duplicate daemons
-    // (the second daemon's startup would unlink the first's live socket).
+    // Avoid concurrent starts racing to replace a live socket.
     if !try_acquire_session_lock(&config.name)? {
         return Err(Error::runtime(format!(
             "session {:?} is already starting (concurrent start in progress)",
@@ -180,8 +175,7 @@ fn session_start_unix(config: DaemonConfig) -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(15);
     while Instant::now() < deadline {
         if sock.exists() {
-            // Release the start-lock now that the daemon socket is confirmed
-            // ready; other `session_start` calls for this name may proceed.
+            // The socket confirms the daemon is ready.
             lock_guard.release();
             println!(
                 "Session '{}' started (pid {}). Use --session {} ...",

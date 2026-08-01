@@ -8,7 +8,7 @@ Near-term focus: make agent MCP workflows reliable end-to-end (install → warm 
 - [x] Canonical bake/session/search/describe/call playbook + `examples/agent_workflow.sh`
 - [x] Mid-daemon OAuth refresh + actionable session/auth IPC errors
 - [x] Resources/prompts without requiring `--session`
-- [x] CHANGELOG + this roadmap; warm-latency thesis in README
+- [x] CHANGELOG and roadmap
 
 ## Next
 
@@ -20,6 +20,3 @@ Near-term focus: make agent MCP workflows reliable end-to-end (install → warm 
 
 - Windows sessions (named pipes) and Windows release binaries
 - GraphQL subscriptions / deeper auto selection
-- Embedded KV only if catalogs grow far beyond ~3k tools or a shared index without a daemon is required
-
-See [AGENTS.md](AGENTS.md) for index/session invariants not to regress.

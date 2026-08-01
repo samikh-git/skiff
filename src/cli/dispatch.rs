@@ -758,6 +758,7 @@ fn dispatch_session(
     remaining: &[String],
     bake: Option<&BakeConfig>,
 ) -> Result<()> {
+    crate::session::validate_session_name(name)?;
     let _ = crate::session::clear_stale_session(name)?;
     if !crate::session::session_sock_path(name).exists() {
         return Err(Error::runtime(format!(

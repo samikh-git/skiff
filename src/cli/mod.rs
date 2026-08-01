@@ -1,8 +1,7 @@
 //! CLI: two-pass argv split, clap globals, and mode dispatch.
 //!
 //! [`split_at_subcommand`] keeps tool flags (e.g. a tool named `--env`) out of
-//! the global parser (upstream GH #15). Session start/stop/list and `--session`
-//! are handled before source-mode mutual exclusion.
+//! the global parser. Session flags are handled before source-mode checks.
 
 pub mod args;
 pub mod bake;
@@ -18,8 +17,7 @@ use std::ffi::OsString;
 
 /// Split argv into `(global_args, tool_args)` at the first positional subcommand.
 ///
-/// Mirrors Python `_split_at_subcommand` so tool flags like `--env` are not
-/// swallowed by the global parser (upstream GH #15).
+/// Keeps tool flags like `--env` out of the global parser.
 pub fn split_at_subcommand(
     argv: &[OsString],
     value_options: &HashSet<String>,

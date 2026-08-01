@@ -15,7 +15,7 @@ All notable changes to this project are documented here.
 ### Changed
 
 - Agent skill prefers `skiff` on PATH (`brew` / `cargo install skiff-cli`) over local `cargo build`
-- README frames warm fat-search latency (~10 ms) and progressive discovery as the product thesis
+- README documents warm discovery and progressive discovery
 
 ## 0.1.2 — 2026-07-31
 

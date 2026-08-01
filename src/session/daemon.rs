@@ -1,11 +1,7 @@
 //! Session daemon: hold one MCP client, serve NDJSON over AF_UNIX.
 //!
-//! Accepts concurrent IPC clients; MCP RPCs are serialized with a mutex.
-//! Tool schemas are cached in-memory (`list_tools` + `refresh: true` busts).
-//! Idle / SIGTERM exits unlink meta + sock.
-//!
-//! HTTP sessions with [`DaemonConfig::oauth`] refresh the Bearer token from the
-//! credential store before each RPC and reconnect when it rotates.
+//! MCP RPCs are serialized with a mutex. Idle exit and SIGTERM remove session
+//! files.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -14,7 +10,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::sync::Mutex;
 
@@ -33,16 +29,19 @@ use crate::session::protocol::{SessionMethod, SessionRequest, SessionResponse};
 use crate::session::spawn::DaemonConfig;
 use crate::tools_index::{build_compact_index, search_compact, CompactIndex};
 
+const IPC_MAX_REQUEST_BYTES: usize = 1024 * 1024;
+const IPC_IO_TIMEOUT: Duration = Duration::from_secs(30);
+
 struct DaemonState {
     name: String,
     config: DaemonConfig,
     client: Option<McpClient>,
-    /// Live OAuth client for mid-daemon refresh (HTTP + oauth only).
+    /// OAuth client used to refresh HTTP session credentials.
     oauth: Option<OAuthReady>,
-    /// Bearer token currently injected into the HTTP connection.
+    /// Token currently configured on the HTTP connection.
     bearer_token: Option<String>,
     tools_cache: Option<Vec<Value>>,
-    /// In-memory names/postings index; rebuilt with `tools_cache`, dies with daemon.
+    /// In-memory search index rebuilt with `tools_cache`.
     tools_index: Option<CompactIndex>,
     last_activity: Instant,
 }
@@ -94,14 +93,7 @@ async fn daemon_main(config: DaemonConfig) -> Result<()> {
         },
     )?;
 
-    // Narrow the umask around bind() so the socket never exists at
-    // umask-derived (potentially group/world-accessible) permissions in the
-    // window between bind() and chmod_0600() below. This is defense-in-depth
-    // only (every accepted connection is already checked against peer UID),
-    // but it's cheap to close. `umask` is process-wide and not thread-safe if
-    // other threads are concurrently creating files; this runs at daemon
-    // startup before the tokio listener/accept loop spawns any other threads
-    // that create files, so it's safe here.
+    // Bind with owner-only permissions; chmod below preserves that invariant.
     #[cfg(unix)]
     let prev_umask = unsafe { libc::umask(0o177) };
     let bind_result = UnixListener::bind(&sock_path);
@@ -358,15 +350,24 @@ async fn handle_client(
     state: Arc<Mutex<DaemonState>>,
 ) -> Result<()> {
     let (reader, mut writer) = stream.into_split();
-    let mut lines = BufReader::new(reader).lines();
-    let Some(line) = lines
-        .next_line()
-        .await
-        .map_err(|e| Error::runtime(e.to_string()))?
-    else {
+    let reader = BufReader::new(reader);
+    let mut line = Vec::new();
+    let len = tokio::time::timeout(
+        IPC_IO_TIMEOUT,
+        reader
+            .take((IPC_MAX_REQUEST_BYTES + 1) as u64)
+            .read_until(b'\n', &mut line),
+    )
+    .await
+    .map_err(|_| Error::runtime("session request timed out"))?
+    .map_err(|e| Error::runtime(e.to_string()))?;
+    if len == 0 {
         return Ok(());
-    };
-    let req: SessionRequest = serde_json::from_str(&line)
+    }
+    if line.len() > IPC_MAX_REQUEST_BYTES {
+        return Err(Error::runtime("session request exceeds 1 MiB"));
+    }
+    let req: SessionRequest = serde_json::from_slice(&line)
         .map_err(|e| Error::runtime(format!("bad session request: {e}")))?;
     let resp = match dispatch(&state, &req).await {
         Ok(v) => SessionResponse::ok(req.id, v),
@@ -374,9 +375,9 @@ async fn handle_client(
     };
     let mut out = serde_json::to_string(&resp)?;
     out.push('\n');
-    writer
-        .write_all(out.as_bytes())
+    tokio::time::timeout(IPC_IO_TIMEOUT, writer.write_all(out.as_bytes()))
         .await
+        .map_err(|_| Error::runtime("session response timed out"))?
         .map_err(|e| Error::runtime(e.to_string()))?;
     let _ = writer.shutdown().await;
     Ok(())

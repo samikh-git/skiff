@@ -79,7 +79,7 @@ Prints binary version/PATH, cache/config dirs, spool/oauth/session/bake summary,
 | `SKIFF_CONFIG_DIR` | `~/.config/skiff` |
 | Sessions | `$SKIFF_CACHE_DIR/sessions/{name}.{sock,json,log}` |
 | Spool | `$SKIFF_CACHE_DIR/spool/` |
-| Tool index | `$SKIFF_CACHE_DIR/<key>_tools_index.json` (names/descriptions) |
+| Tool index | `$SKIFF_CACHE_DIR/<key>_tools_index.json` (names and sparse overrides) |
 | OAuth | `$SKIFF_CACHE_DIR/oauth/<hash>/` |
 | Baked | `$SKIFF_CONFIG_DIR/baked.json` |
 

@@ -42,9 +42,9 @@ skiff doctor
 skiff --mcp-stdio "npx -y @modelcontextprotocol/server-filesystem /tmp" --agent --list
 ```
 
-## Workflow (token-efficient / agent)
+## Workflow
 
-Progressive discovery beats dumping full schemas (compete with Code Mode on tokens):
+Use progressive discovery to keep output focused:
 
 1. One source: `--mcp` | `--mcp-stdio` | `--spec` | `--graphql`
 2. Discover lightly: `--list --json --detail names` or `--search PATTERN`
@@ -73,16 +73,10 @@ skiff --graphql https://api.example.com/graphql --fields "id name" user --id 1
 Name lists may use **prefix compression**:
 `{"groups":{"workers-scripts":["list","get"]},"names":["echo"]}` → tool ids `workers-scripts-list`, etc.
 
-### How search stays fast (local index)
+### Local discovery cache
 
-MCP `list_tools` returns **every** tool with full `inputSchema` (multi‑MB on fat APIs). skiff:
-
-1. Caches the full list under `$SKIFF_CACHE_DIR`
-2. Writes a slim **v4** `*_tools_index.json` (sorted names + sparse tool-name overrides; postings rebuilt in RAM)
-3. Warm `--search` / `--detail names` reads the **index**, not full schemas
-4. With `--session`, the daemon keeps `CompactIndex` in RAM and serves `list_tools_light` (search in-process)
-
-That cuts CPU and disk I/O; **agent tokens** still depend on stdout (`--top`, compression). True **server-side** search needs MCP protocol/server support we do not assume — the index is the portable stand-in.
+Warm `--search` and `--detail names` use the local catalog index. With `--session`,
+name-only discovery uses the daemon's in-memory catalog.
 
 ## Canonical agent playbook (Cloudflare Docs MCP)
 

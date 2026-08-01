@@ -144,9 +144,9 @@ pub fn resolve_secret(value: &str) -> Result<String> {
         let text = std::fs::read_to_string(path)?;
         return Ok(text.trim_end_matches('\n').to_string());
     }
-    Err(Error::runtime(format!(
-        "refusing literal secret value {value:?}: use env:VAR or file:/path instead of putting secrets directly on the command line"
-    )))
+    Err(Error::runtime(
+        "refusing literal secret value: use env:VAR or file:/path instead of putting secrets directly on the command line",
+    ))
 }
 
 /// Truncate JSON arrays to first N elements; pass through other values.
@@ -326,10 +326,12 @@ mod tests {
 
     #[test]
     fn resolve_secret_rejects_literal() {
-        let err = resolve_secret("literal-token-on-argv").unwrap_err();
+        let secret = "literal-token-on-argv";
+        let err = resolve_secret(secret).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("env:VAR"));
         assert!(msg.contains("file:/path"));
+        assert!(!msg.contains(secret));
     }
 
     #[test]

@@ -1,8 +1,6 @@
 # skiff
 
-Turn an MCP server, OpenAPI spec, or GraphQL endpoint into a CLI at runtime, with no codegen. Aimed at agent workflows: progressive discovery, a warm catalog index, sessions, and spool for large payloads.
-
-**Why a CLI instead of in-process MCP?** Agents that shell out need progressive discovery (`--detail names` → `--describe` → call), warm search over thousands of tools (~10 ms after first fetch), and spool pointers for huge payloads — not a full schema dump into context every turn.
+Turn an MCP server, OpenAPI spec, or GraphQL endpoint into a CLI at runtime, with no codegen. It supports progressive discovery, warm catalog lookup, sessions, and spool files for large payloads.
 
 Inspired by [knowsuchagency/mcp2cli](https://github.com/knowsuchagency/mcp2cli) (Python prior art). skiff is a separate Rust project, focused on warm-path latency and lighter agent defaults.
 
@@ -186,11 +184,11 @@ Measured 2026-07-31 against upstream Python [`mcp2cli`](https://github.com/knows
 
 Cold first fetch of the fat Cloudflare catalog is ~1-2 s for Rust and ~2-3.5 s for Python (network + full `list_tools`). After that, Rust stays near 10 ms because warm discovery reads a slim v4 tools index (~143 KiB names + overrides; postings rebuilt in memory) or, with `--session`, searches an in-daemon RAM index over Unix IPC. Python's warm path still pays a large per-invocation cost on this catalog (often seconds), so spawn and cache alone do not explain the gap.
 
-#### Index / session notes
+#### Discovery notes
 
-- Non-session disk index omits descriptions and postings by default; `--detail brief` may fall through to the full tools cache.
-- Session daemons hold `CompactIndex` in RAM and answer `list_tools_light` without shipping `inputSchema`s. Prefer this for fat servers.
-- Full `tools.json` remains ~2.4 MB for schema-heavy calls (`--detail full`, `--describe`, tool `--help`).
+- `--detail brief` may fetch the full tools cache when the local index has no descriptions.
+- Sessions return lightweight catalog entries for name-only discovery.
+- Full schemas are returned for `--detail full`, `--describe`, and tool help.
 
 #### Limitations of this comparison
 
@@ -201,7 +199,7 @@ Cold first fetch of the fat Cloudflare catalog is ~1-2 s for Rust and ~2-3.5 s f
 - Machine noise: medians over 10 warm runs on one laptop; expect variance across OS/load.
 - Feature asymmetry: `--agent`, sessions, spool, and native `--toon` are Rust-only in this harness.
 
-The clearest gap is warm discovery latency, especially search over thousands of tools, which is what the compact index and session RAM path are for. Token and byte counts still depend on the scenario: progressive `--detail` / `--top` / `--agent` matter more for context size than raw CLI speed.
+Token and byte counts depend on the scenario; use progressive `--detail`, `--top`, and `--agent` to limit context size.
 
 ## Status / limits
 
