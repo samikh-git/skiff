@@ -212,12 +212,24 @@ pub fn commands_to_json(commands: &[CommandDef], detail: ListDetail) -> Value {
 /// `{"groups":{"workers-scripts":["list","get"]},"names":["echo"]}`
 /// → tool id = `"{prefix}-{suffix}"` for groups, or bare `names` entries.
 pub fn names_list_json(commands: &[CommandDef]) -> Value {
-    let names: Vec<String> = commands.iter().map(|c| c.name.clone()).collect();
+    let mut seen = std::collections::HashSet::new();
+    let names: Vec<String> = commands
+        .iter()
+        .filter(|c| seen.insert(c.name.clone()))
+        .map(|c| c.name.clone())
+        .collect();
     compress_names(&names)
         .unwrap_or_else(|| Value::Array(names.into_iter().map(Value::String).collect()))
 }
 
 fn compress_names(names: &[String]) -> Option<Value> {
+    // Dedupe while preserving order (fat catalogs can emit duplicate kebab ids).
+    let mut seen = std::collections::HashSet::new();
+    let names: Vec<String> = names
+        .iter()
+        .filter(|n| seen.insert((*n).clone()))
+        .cloned()
+        .collect();
     if names.len() < 8 {
         return None;
     }
@@ -225,7 +237,7 @@ fn compress_names(names: &[String]) -> Option<Value> {
         std::collections::BTreeMap::new();
     let mut ungrouped: Vec<String> = Vec::new();
 
-    for name in names {
+    for name in &names {
         match name.rfind('-') {
             Some(i) if i > 0 && i + 1 < name.len() => {
                 let prefix = name[..i].to_string();
@@ -238,6 +250,12 @@ fn compress_names(names: &[String]) -> Option<Value> {
 
     let mut kept = serde_json::Map::new();
     for (prefix, suffixes) in groups {
+        // Unique suffixes within a group (duplicate full names → duplicate suffixes).
+        let mut suf_seen = std::collections::HashSet::new();
+        let suffixes: Vec<String> = suffixes
+            .into_iter()
+            .filter(|s| suf_seen.insert(s.clone()))
+            .collect();
         if suffixes.len() >= 2 {
             kept.insert(
                 prefix,
@@ -323,5 +341,42 @@ mod tests {
         .len();
         let c_len = serde_json::to_vec(&v).unwrap().len();
         assert!(c_len < flat_len);
+    }
+
+    #[test]
+    fn compress_dedupes_duplicate_names() {
+        let mut names: Vec<String> = (0..10)
+            .map(|i| format!("accounts-workers-by-worker-{i}"))
+            .collect();
+        // Same kebab id twice (fat catalogs sometimes emit this).
+        names.push("accounts-workers-by-worker-0".into());
+        names.push("accounts-workers-by-worker-0".into());
+        let v = names_list_json(
+            &names
+                .iter()
+                .map(|n| CommandDef {
+                    name: n.clone(),
+                    ..Default::default()
+                })
+                .collect::<Vec<_>>(),
+        );
+        if let Some(groups) = v.get("groups") {
+            for (_, suffixes) in groups.as_object().unwrap() {
+                let arr = suffixes.as_array().unwrap();
+                let mut seen = std::collections::HashSet::new();
+                for s in arr {
+                    assert!(
+                        seen.insert(s.as_str().unwrap()),
+                        "duplicate suffix in compress groups: {s}"
+                    );
+                }
+            }
+        } else {
+            let arr = v.as_array().unwrap();
+            let mut seen = std::collections::HashSet::new();
+            for n in arr {
+                assert!(seen.insert(n.as_str().unwrap()));
+            }
+        }
     }
 }

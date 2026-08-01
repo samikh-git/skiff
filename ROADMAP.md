@@ -14,7 +14,7 @@ Near-term focus: make agent MCP workflows reliable end-to-end (install → warm 
 
 ## Next (evidence-ranked)
 
-1. **Dogfood real MCPs**; fix whatever early users hit first
+1. **Dogfood real MCPs**; fix whatever early users hit first — Cloudflare Docs + fat catalog exercised (2026-08-01); remaining: more servers / OpenAPI
 2. **OpenAPI realism** when a real bake target fails (path-level params, form-urlencoded, external `$ref`)
 3. Broader release artifacts (musl / arm Linux) as demand appears
 4. Publish **0.1.3** to crates.io / Homebrew when ready
@@ -57,4 +57,6 @@ Against **Python mcp2cli 3.3.1** (`uvx --with mcp==1.12.0 mcp2cli`) and **skiff*
 
 Auth `Bearer:env:`, skill-from-API playbook, exit-code docs, `bake import`, shell completion, doctor stale detection.
 
-**Next:** dogfood / OpenAPI realism; crates.io + Homebrew 0.1.3.
+Cloudflare MCP dogfood (Docs + fat `codemode=false`): warm names ~0 ms; sessions/search/describe/call/spool OK. Fixes from that pass: snake_case / `toolName` call aliases, `TOOL --help --json`, compress dedupe. `--list-resources` fails with MCP `-32601` on Docs (server gap).
+
+**Next:** more dogfood / OpenAPI realism; crates.io + Homebrew 0.1.3.

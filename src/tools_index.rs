@@ -285,7 +285,7 @@ pub fn tools_to_light_commands(tools: &[Value]) -> Vec<CommandDef> {
 /// Search using postings when `pattern` is a single kebab token; else scan names.
 pub fn search_compact(index: &CompactIndex, pattern: &str) -> Vec<ToolIndexEntry> {
     let p = pattern.to_lowercase();
-    let ids = if !p.is_empty() && !p.contains('-') && !p.contains(' ') {
+    let mut ids = if !p.is_empty() && !p.contains('-') && !p.contains(' ') {
         if let Some(list) = index.postings.get(&p) {
             list.clone()
         } else {
@@ -305,6 +305,9 @@ pub fn search_compact(index: &CompactIndex, pattern: &str) -> Vec<ToolIndexEntry
     } else {
         return scan_names(index, &p);
     };
+
+    ids.sort_unstable();
+    ids.dedup();
 
     ids.into_iter()
         .filter_map(|i| {

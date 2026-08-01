@@ -55,7 +55,7 @@ Use progressive discovery to keep output focused:
 
 1. One source: `--mcp` | `--mcp-stdio` | `--spec` | `--graphql`
 2. Discover lightly: `--list --json --detail names` or `--search PATTERN`
-3. Describe one tool: `--describe TOOL` or `TOOL --help --json`
+3. Describe one tool: `--describe TOOL` or `TOOL --help --json` (kebab CLI name preferred; MCP `toolName` / snake_case also accepted)
 4. Run; prefer `--json` (content-only) or `--toon`; preview with `--head N`
 5. If stdout has `"spooled": true`, **`rg` the `path`** — do not `cat` the whole file
 
@@ -102,8 +102,10 @@ skiff --mcp https://docs.mcp.cloudflare.com/mcp \
   --session-start cfdocs
 
 skiff @cfdocs --agent --search workers
+skiff @cfdocs --describe search-cloudflare-documentation
+# MCP toolName / snake_case also works:
 skiff @cfdocs --describe search_cloudflare_documentation
-skiff @cfdocs --agent search_cloudflare_documentation --query "workers kv"
+skiff @cfdocs --agent search-cloudflare-documentation --query "workers kv"
 # if stdout has "spooled": true → rg the path; do not cat the whole file
 
 skiff --session-stop cfdocs

@@ -179,15 +179,28 @@ pub fn emit_command_help(
     Ok(())
 }
 
-/// If remaining is `TOOL --help`/`-h`, emit help and return true.
+/// If remaining is `TOOL --help`/`-h` (optional trailing `--json`/`--toon`), emit help.
 pub fn maybe_tool_help(
     commands: &[CommandDef],
     remaining: &[String],
     pre: &crate::cli::args::GlobalArgs,
 ) -> crate::error::Result<bool> {
     if remaining.len() >= 2 && (remaining[1] == "--help" || remaining[1] == "-h") {
-        if let Some(cmd) = commands.iter().find(|c| c.name == remaining[0]) {
-            emit_command_help(cmd, pre)?;
+        if let Some(cmd) = find_command(commands, &remaining[0]) {
+            let trailing_json = remaining.iter().skip(2).any(|a| a == "--json");
+            let trailing_toon = remaining.iter().skip(2).any(|a| a == "--toon");
+            if trailing_json || trailing_toon || pre.json_output || pre.toon || pre.agent {
+                let mut opts = pre.output_options();
+                if trailing_json || pre.json_output || pre.agent {
+                    opts.json_output = true;
+                }
+                if trailing_toon || pre.toon {
+                    opts.toon = true;
+                }
+                output_result(crate::model::command_to_json(cmd), &opts)?;
+            } else {
+                crate::cli::dynamic::print_command_help(cmd);
+            }
             return Ok(true);
         }
     }
@@ -199,13 +212,35 @@ pub fn describe_tool(
     name: &str,
     pre: &crate::cli::args::GlobalArgs,
 ) -> crate::error::Result<()> {
-    let cmd = commands
-        .iter()
-        .find(|c| c.name == name || c.tool_name.as_deref() == Some(name))
+    let cmd = find_command(commands, name)
         .ok_or_else(|| crate::error::Error::usage(format!("unknown tool: {name}")))?;
     // describe always structured
     let mut opts = pre.output_options();
     opts.json_output = true;
     output_result(crate::model::command_to_json(cmd), &opts)?;
     Ok(())
+}
+
+/// Match CLI kebab name, MCP `toolName`, or kebab↔snake variants.
+pub fn find_command<'a>(commands: &'a [CommandDef], name: &str) -> Option<&'a CommandDef> {
+    commands.iter().find(|c| command_matches(c, name))
+}
+
+fn command_matches(cmd: &CommandDef, name: &str) -> bool {
+    if cmd.name == name {
+        return true;
+    }
+    if cmd.tool_name.as_deref() == Some(name) {
+        return true;
+    }
+    // Allow snake_case for kebab CLI names (and the reverse).
+    if cmd.name.replace('-', "_") == name {
+        return true;
+    }
+    if let Some(tn) = &cmd.tool_name {
+        if crate::coerce::to_kebab(tn) == name {
+            return true;
+        }
+    }
+    false
 }

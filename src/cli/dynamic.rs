@@ -27,9 +27,7 @@ pub fn parse_tool_args(commands: &[CommandDef], remaining: &[String]) -> Result<
     }
 
     let name = &remaining[0];
-    let cmd = commands
-        .iter()
-        .find(|c| &c.name == name)
+    let cmd = crate::cli::list::find_command(commands, name)
         .cloned()
         .ok_or_else(|| Error::usage(format!("unknown command: {name}")))?;
 

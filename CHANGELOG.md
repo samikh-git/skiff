@@ -14,6 +14,9 @@ All notable changes to this project are documented here.
 
 - Competitive gap analysis documented in ROADMAP; skill-from-API playbook; exit codes; `Bearer:env:` auth resolution
 - README / skill: install, completion, bake import, doctor refresh guidance
+- Tool lookup accepts MCP `toolName` and snake_case aliases (not only kebab CLI names)
+- `TOOL --help --json` / `--toon` honor trailing format flags (not only globals before the tool)
+- Name-list prefix compression dedupes duplicate kebab ids (fat catalogs)
 
 ## 0.1.2 — 2026-07-31
 
