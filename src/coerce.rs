@@ -317,10 +317,7 @@ mod tests {
     #[test]
     fn resolve_secret_file_prefix() {
         let dir = std::env::temp_dir();
-        let path = dir.join(format!(
-            "skiff-resolve-secret-test-{}",
-            std::process::id()
-        ));
+        let path = dir.join(format!("skiff-resolve-secret-test-{}", std::process::id()));
         std::fs::write(&path, "topsecret\n").unwrap();
         let resolved = resolve_secret(&format!("file:{}", path.display())).unwrap();
         assert_eq!(resolved, "topsecret");
