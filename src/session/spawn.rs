@@ -15,8 +15,9 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::session::paths::chmod_0600;
 use crate::session::paths::{
-    clear_stale_session, ensure_sessions_dir, load_meta, session_config_path, session_is_alive,
-    session_log_path, session_sock_path, sessions_dir, unlink_session_files, validate_session_name,
+    clear_stale_session, ensure_sessions_dir, load_meta, release_session_lock, session_config_path,
+    session_is_alive, session_log_path, session_sock_path, sessions_dir, try_acquire_session_lock,
+    unlink_session_files, validate_session_name,
 };
 
 pub const DEFAULT_IDLE_SECS: u64 = 1800;
@@ -51,10 +52,48 @@ pub fn session_start(config: DaemonConfig) -> Result<()> {
     }
 }
 
+/// RAII guard that releases the per-session start lock on drop, covering both
+/// early-return error paths and the success path.
+struct SessionLockGuard<'a> {
+    name: &'a str,
+    released: bool,
+}
+
+impl<'a> SessionLockGuard<'a> {
+    fn release(mut self) {
+        release_session_lock(self.name);
+        self.released = true;
+    }
+}
+
+impl<'a> Drop for SessionLockGuard<'a> {
+    fn drop(&mut self) {
+        if !self.released {
+            release_session_lock(self.name);
+        }
+    }
+}
+
 #[cfg(unix)]
 fn session_start_unix(config: DaemonConfig) -> Result<()> {
     validate_session_name(&config.name)?;
     ensure_sessions_dir()?;
+
+    // Serialize the entire check-then-spawn sequence for this session name so
+    // two concurrent `session_start_unix` calls can't both pass the
+    // is-it-already-running check and race to spawn/bind duplicate daemons
+    // (the second daemon's startup would unlink the first's live socket).
+    if !try_acquire_session_lock(&config.name)? {
+        return Err(Error::runtime(format!(
+            "session {:?} is already starting (concurrent start in progress)",
+            config.name
+        )));
+    }
+    let lock_guard = SessionLockGuard {
+        name: &config.name,
+        released: false,
+    };
+
     let _ = clear_stale_session(&config.name)?;
 
     if let Some(meta) = load_meta(&config.name)? {
@@ -102,6 +141,9 @@ fn session_start_unix(config: DaemonConfig) -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(15);
     while Instant::now() < deadline {
         if sock.exists() {
+            // Release the start-lock now that the daemon socket is confirmed
+            // ready; other `session_start` calls for this name may proceed.
+            lock_guard.release();
             println!(
                 "Session '{}' started (pid {}). Use --session {} ...",
                 config.name,

@@ -97,42 +97,46 @@ fn oauth_client_credentials_list_and_echo() {
     let server = OAuthServer::start();
 
     let (mut cmd, _dir) = skiff_isolated();
-    cmd.args([
-        "--mcp",
-        &server.url,
-        "--transport",
-        "streamable",
-        "--oauth-flow",
-        "client_credentials",
-        "--oauth-client-id",
-        &server.client_id,
-        "--oauth-client-secret",
-        &server.client_secret,
-        "--list",
-    ])
-    .timeout(Duration::from_secs(60))
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("echo"));
+    cmd.env("SKIFF_TEST_OAUTH_CLIENT_ID", &server.client_id)
+        .env("SKIFF_TEST_OAUTH_CLIENT_SECRET", &server.client_secret)
+        .args([
+            "--mcp",
+            &server.url,
+            "--transport",
+            "streamable",
+            "--oauth-flow",
+            "client_credentials",
+            "--oauth-client-id",
+            "env:SKIFF_TEST_OAUTH_CLIENT_ID",
+            "--oauth-client-secret",
+            "env:SKIFF_TEST_OAUTH_CLIENT_SECRET",
+            "--list",
+        ])
+        .timeout(Duration::from_secs(60))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("echo"));
 
     let (mut cmd, _dir) = skiff_isolated();
-    cmd.args([
-        "--mcp",
-        &server.url,
-        "--transport",
-        "streamable",
-        "--oauth-client-id",
-        &server.client_id,
-        "--oauth-client-secret",
-        &server.client_secret,
-        "echo",
-        "--message",
-        "oauth ok",
-    ])
-    .timeout(Duration::from_secs(60))
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("oauth ok"));
+    cmd.env("SKIFF_TEST_OAUTH_CLIENT_ID", &server.client_id)
+        .env("SKIFF_TEST_OAUTH_CLIENT_SECRET", &server.client_secret)
+        .args([
+            "--mcp",
+            &server.url,
+            "--transport",
+            "streamable",
+            "--oauth-client-id",
+            "env:SKIFF_TEST_OAUTH_CLIENT_ID",
+            "--oauth-client-secret",
+            "env:SKIFF_TEST_OAUTH_CLIENT_SECRET",
+            "echo",
+            "--message",
+            "oauth ok",
+        ])
+        .timeout(Duration::from_secs(60))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("oauth ok"));
 }
 
 #[test]

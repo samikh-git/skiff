@@ -82,3 +82,24 @@ jobs:
             Or download a binary tarball from the assets below.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Bumps Formula/skiff.rb in samikh-git/homebrew-tools (url + sha256 for the tag archive).
+  # Needs repo secret HOMEBREW_TAP_TOKEN: a PAT with Contents write on samikh-git/homebrew-tools
+  # (classic: repo scope, or fine-grained: Contents R/W on that tap only).
+  homebrew:
+    name: Bump Homebrew formula
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: mislav/bump-homebrew-formula-action@v4
+        with:
+          formula-name: skiff
+          homebrew-tap: samikh-git/homebrew-tools
+          tag-name: ${{ github.ref_name }}
+          commit-message: |
+            skiff {{version}}
+
+            Automated by the skiff Release workflow.
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

@@ -1,8 +1,8 @@
 # skiff
 
-Turn any **MCP server**, **OpenAPI** spec, or **GraphQL** endpoint into a CLI at runtime — zero codegen. Built for agent workflows: progressive discovery, warm catalog index, sessions, and spool for huge payloads.
+Turn an MCP server, OpenAPI spec, or GraphQL endpoint into a CLI at runtime, with no codegen. Aimed at agent workflows: progressive discovery, a warm catalog index, sessions, and spool for large payloads.
 
-Inspired by [knowsuchagency/mcp2cli](https://github.com/knowsuchagency/mcp2cli) (Python prior art); skiff is a separate Rust project with its own focus on warm-path latency and token-efficient defaults.
+Inspired by [knowsuchagency/mcp2cli](https://github.com/knowsuchagency/mcp2cli) (Python prior art). skiff is a separate Rust project, focused on warm-path latency and lighter agent defaults.
 
 ## Install
 
@@ -17,6 +17,11 @@ cargo install skiff-cli
 # from source
 cargo install --git https://github.com/samikh-git/skiff --locked
 # or: cargo build --release && cargo install --path .
+
+# Agent skill (Cursor / Claude / Codex / … via skills CLI)
+npx skills add samikh-git/skiff
+# or: npx skills add samikh-git/skiff -g          # global
+#     npx skills add samikh-git/skiff -s skiff -y # non-interactive
 ```
 
 Binary: `skiff` (or `./target/release/skiff`).
@@ -46,7 +51,7 @@ skiff --graphql http://127.0.0.1:4000 --fields "id name" user --id 1
 
 ### Sessions (Unix only)
 
-Keeps one long-lived MCP client behind a Unix-domain socket so agents avoid paying `npx`/initialize on every call.
+Runs one long-lived MCP client behind a Unix-domain socket so agents do not pay `npx`/initialize on every call.
 
 ```bash
 skiff --mcp-stdio "python3 ./tests/fixtures/mcp_test_server.py" --session-start myfs
@@ -103,17 +108,23 @@ Configs: `$SKIFF_CONFIG_DIR/baked.json` (default `~/.config/skiff/baked.json`).
 
 ## Security
 
-- **Secrets:** use `env:` / `file:` prefixes on `--auth-header` and OAuth flags — never literal tokens on argv.
-- **Trust:** treat remote MCP/API responses as untrusted input.
-- **URLs:** remote `--spec` / `--mcp` / `--graphql` fetches are **not** SSRF-sandboxed; only pass URLs you trust.
-- **Cache dir:** do not point `SKIFF_CACHE_DIR` at a shared world-writable path (sessions and OAuth store secrets there).
-- **Sessions:** same-UID local IPC only; `--session-clean-env` for untrusted stdio servers.
+- Secrets: use `env:` / `file:` prefixes on `--auth-header` and OAuth flags. Never put literal tokens on argv.
+- Trust: treat remote MCP/API responses as untrusted input.
+- URLs: remote `--spec` / `--mcp` / `--graphql` fetches are not SSRF-sandboxed; only pass URLs you trust.
+- Cache dir: do not point `SKIFF_CACHE_DIR` at a shared world-writable path (sessions and OAuth store secrets there).
+- Sessions: same-UID local IPC only; `--session-clean-env` for untrusted stdio servers.
 
 ## Agent skill
 
-Cursor skill for agents: [`.cursor/skills/skiff/`](.cursor/skills/skiff/).
+The agent skill is in [`skills/skiff/`](skills/skiff/), which [`npx skills`](https://skills.sh/) discovers. Install it with:
 
-Token-efficient agent path: `--agent` (or `SKIFF_AGENT=1`) → progressive `--detail names|brief` → `--describe` / `TOOL --help --json` → `--json` or `--toon`. Oversized results spill to `$SKIFF_CACHE_DIR/spool/` with a small stdout pointer for `rg`.
+```bash
+npx skills add samikh-git/skiff
+```
+
+In this repo, [`.cursor/skills/skiff`](.cursor/skills/skiff) is a symlink to that directory for Cursor.
+
+For agents, start with `--agent` (or `SKIFF_AGENT=1`), then use `--detail names|brief`, `--describe` / `TOOL --help --json`, and `--json` or `--toon`. Oversized results go to `$SKIFF_CACHE_DIR/spool/` with a short stdout pointer you can `rg`.
 
 Cloudflare MCP byte bench (optional):
 
@@ -138,35 +149,35 @@ Measured 2026-07-31 against upstream Python [`mcp2cli`](https://github.com/knows
 |----------|-----------------:|-------------------:|----------------:|
 | Docs MCP `--list --json --compact` | 8.2 ms | 575 ms | ~70× |
 | Docs MCP `--list --json` | 12.8 ms | 555 ms | ~43× |
-| Fat catalog `--search workers --json --compact --top 20` | **9.9 ms** | 3224 ms | **~325×** |
+| Fat catalog `--search workers --json --compact --top 20` | 9.9 ms | 3224 ms | ~325× |
 | Fat catalog `--list --json --compact` | 12.8 ms | 1846 ms | ~144× |
-| Fat catalog session `--agent --search workers` (Rust-only) | 12.8 ms | — | — |
+| Fat catalog session `--agent --search workers` (Rust-only) | 12.8 ms | - | - |
 
-Cold first fetch of the fat Cloudflare catalog is ~1–2 s for Rust and ~2–3.5 s for Python (network + full `list_tools`). After that, Rust stays near **10 ms** because warm discovery reads a slim **v4 tools index** (~143 KiB names + overrides; postings rebuilt in memory) or, with `--session`, searches an in-daemon RAM index over Unix IPC. Python’s warm path still pays a large per-invocation cost on this catalog (often seconds), so spawn + cache alone do not explain the gap.
+Cold first fetch of the fat Cloudflare catalog is ~1-2 s for Rust and ~2-3.5 s for Python (network + full `list_tools`). After that, Rust stays near 10 ms because warm discovery reads a slim v4 tools index (~143 KiB names + overrides; postings rebuilt in memory) or, with `--session`, searches an in-daemon RAM index over Unix IPC. Python's warm path still pays a large per-invocation cost on this catalog (often seconds), so spawn and cache alone do not explain the gap.
 
-**Index / session notes**
+#### Index / session notes
 
 - Non-session disk index omits descriptions and postings by default; `--detail brief` may fall through to the full tools cache.
-- Session daemons hold `CompactIndex` in RAM and answer `list_tools_light` without shipping `inputSchema`s — preferred for fat servers.
+- Session daemons hold `CompactIndex` in RAM and answer `list_tools_light` without shipping `inputSchema`s. Prefer this for fat servers.
 - Full `tools.json` remains ~2.4 MB for schema-heavy calls (`--detail full`, `--describe`, tool `--help`).
 
-**Limitations of this comparison**
+#### Limitations of this comparison
 
-- **Not identical stdout:** on fat `--search … --top 20`, Python returned fewer bytes (~719 vs ~1100). Formats and hit sets can differ; do not treat byte counts as a pure efficiency win either way.
-- **Heuristic tokens:** `ceil(bytes/4)`, not tiktoken.
-- **Auth / transport:** both use `--transport streamable` and `Authorization:Bearer …`. Results depend on Cloudflare MCP availability and token scope.
-- **Python pin:** SDK pin is required for a fair streamable run; future upstream fixes may change absolute Python numbers.
-- **Machine noise:** medians over 10 warm runs on one laptop; expect variance across OS/load.
-- **Feature asymmetry:** `--agent`, sessions, spool, native `--toon` are Rust-only in this harness.
+- Not identical stdout: on fat `--search … --top 20`, Python returned fewer bytes (~719 vs ~1100). Formats and hit sets can differ; do not treat byte counts as a pure efficiency win either way.
+- Heuristic tokens: `ceil(bytes/4)`, not tiktoken.
+- Auth / transport: both use `--transport streamable` and `Authorization:Bearer …`. Results depend on Cloudflare MCP availability and token scope.
+- Python pin: SDK pin is required for a fair streamable run; future upstream fixes may change absolute Python numbers.
+- Machine noise: medians over 10 warm runs on one laptop; expect variance across OS/load.
+- Feature asymmetry: `--agent`, sessions, spool, and native `--toon` are Rust-only in this harness.
 
-**Analysis:** the headline win is **latency on warm discovery**, especially search over thousands of tools — the design goal of the compact index + session RAM path. Token/byte competition remains scenario-dependent: progressive `--detail` / `--top` / `--agent` still matter more for context size than raw CLI speed.
+The clearest gap is warm discovery latency, especially search over thousands of tools, which is what the compact index and session RAM path are for. Token and byte counts still depend on the scenario: progressive `--detail` / `--top` / `--agent` matter more for context size than raw CLI speed.
 
 ## Status / limits
 
 Shipped: OpenAPI, MCP stdio/HTTP (streamable + SSE), OAuth, GraphQL, sessions (Unix), bake/`@name`, list/search/output flags, native `--toon`, `--envelope`, spool overflow, `--agent` defaults.
 
-Still thin: no Windows sessions; no mid-daemon OAuth refresh (restart the session if the token TTL is shorter than idle).
+Not done yet: no Windows sessions; no mid-daemon OAuth refresh (restart the session if the token TTL is shorter than idle).
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Python mcp2cli © Stephan Fitzpatrick / knowsuchagency.
+MIT. See [LICENSE](LICENSE). Python mcp2cli © Stephan Fitzpatrick / knowsuchagency.

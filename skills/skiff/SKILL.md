@@ -31,10 +31,10 @@ Progressive discovery beats dumping full schemas (compete with Code Mode on toke
 5. If stdout has `"spooled": true`, **`rg` the `path`** — do not `cat` the whole file
 
 ```bash
-$MCP2CLI --mcp-stdio "npx -y @modelcontextprotocol/server-filesystem /tmp" --agent --list
-$MCP2CLI --mcp http://127.0.0.1:8000/mcp --list --json --detail names
-$MCP2CLI --spec ./openapi.json --base-url https://api.example.com list-pets --limit 5
-$MCP2CLI --graphql https://api.example.com/graphql --fields "id name" user --id 1
+$SKIFF --mcp-stdio "npx -y @modelcontextprotocol/server-filesystem /tmp" --agent --list
+$SKIFF --mcp http://127.0.0.1:8000/mcp --list --json --detail names
+$SKIFF --spec ./openapi.json --base-url https://api.example.com list-pets --limit 5
+$SKIFF --graphql https://api.example.com/graphql --fields "id name" user --id 1
 ```
 
 `--agent` / `SKIFF_AGENT=1`: JSON; `--search` ⇒ `--detail names` + `--top 20`; otherwise brief list; spill oversize to spool (64KiB).
@@ -67,10 +67,10 @@ That cuts CPU and disk I/O; **agent tokens** still depend on stdout (`--top`, co
 Warm one MCP connection; later calls are cheap IPC (`get_tool` for single-tool schema on call).
 
 ```bash
-$MCP2CLI --mcp-stdio "npx -y @modelcontextprotocol/server-filesystem /tmp" --session-start myfs
-$MCP2CLI --session myfs read-file --path /tmp/hello.txt
-$MCP2CLI --session-list --json
-$MCP2CLI --session-stop myfs
+$SKIFF --mcp-stdio "npx -y @modelcontextprotocol/server-filesystem /tmp" --session-start myfs
+$SKIFF --session myfs read-file --path /tmp/hello.txt
+$SKIFF --session-list --json
+$SKIFF --session-stop myfs
 ```
 
 | Issue | Action |
@@ -83,9 +83,9 @@ $MCP2CLI --session-stop myfs
 ## Bake
 
 ```bash
-$MCP2CLI bake create myfs --mcp-stdio "npx -y …" --session myfs
-$MCP2CLI @myfs --list    # needs session already started if bake has --session
-$MCP2CLI bake show myfs  # secrets masked
+$SKIFF bake create myfs --mcp-stdio "npx -y …" --session myfs
+$SKIFF @myfs --list    # needs session already started if bake has --session
+$SKIFF bake show myfs  # secrets masked
 ```
 
 ## Auth
@@ -93,9 +93,9 @@ $MCP2CLI bake show myfs  # secrets masked
 Always `env:` / `file:` — never literal secrets on argv.
 
 ```bash
-$MCP2CLI --mcp https://mcp.example.com/mcp --auth-header "Authorization:env:API_TOKEN" --list
-$MCP2CLI --mcp https://mcp.example.com/mcp --oauth --list
-$MCP2CLI --mcp https://docs.mcp.cloudflare.com/mcp \
+$SKIFF --mcp https://mcp.example.com/mcp --auth-header "Authorization:env:API_TOKEN" --list
+$SKIFF --mcp https://mcp.example.com/mcp --oauth --list
+$SKIFF --mcp https://docs.mcp.cloudflare.com/mcp \
   --auth-header "Authorization:Bearer:env:CF_API_TOKEN" --agent --list --detail names
 ```
 
@@ -119,7 +119,7 @@ cargo test --test cloudflare_bench -- --ignored --nocapture
 
 ## Wrap an API as a skill
 
-1. List/probe with `$MCP2CLI … --agent --list` and real calls  
+1. List/probe with `$SKIFF … --agent --list` and real calls  
 2. `bake create` with `env:` auth + filters  
 3. `bake install NAME --dir <skill>/scripts/`  
 4. Write `SKILL.md` with gotchas only — not a full `--help` dump  

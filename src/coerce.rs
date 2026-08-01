@@ -123,7 +123,11 @@ pub fn coerce_value(value: Option<Value>, schema: &Value) -> Option<Value> {
     }
 }
 
-/// Resolve `env:VAR`, `file:/path`, or literal secret values.
+/// Resolve `env:VAR` or `file:/path` secret values.
+///
+/// Literal values (no recognized prefix) are rejected: secrets must never be
+/// passed directly on argv, where they leak via `ps`, `/proc/<pid>/cmdline`,
+/// and shell history.
 pub fn resolve_secret(value: &str) -> Result<String> {
     if let Some(var) = value.strip_prefix("env:") {
         return std::env::var(var)
@@ -140,7 +144,9 @@ pub fn resolve_secret(value: &str) -> Result<String> {
         let text = std::fs::read_to_string(path)?;
         return Ok(text.trim_end_matches('\n').to_string());
     }
-    Ok(value.to_string())
+    Err(Error::runtime(format!(
+        "refusing literal secret value {value:?}: use env:VAR or file:/path instead of putting secrets directly on the command line"
+    )))
 }
 
 /// Truncate JSON arrays to first N elements; pass through other values.
@@ -291,6 +297,42 @@ mod tests {
         assert_eq!(to_kebab("list_items"), "list-items");
         assert_eq!(to_kebab("list-items"), "list-items");
         assert_eq!(to_kebab("getHTTPResponse"), "get-httpresponse");
+    }
+
+    #[test]
+    fn resolve_secret_env_prefix() {
+        std::env::set_var("SKIFF_TEST_RESOLVE_SECRET_ENV", "shh");
+        assert_eq!(
+            resolve_secret("env:SKIFF_TEST_RESOLVE_SECRET_ENV").unwrap(),
+            "shh"
+        );
+        std::env::remove_var("SKIFF_TEST_RESOLVE_SECRET_ENV");
+    }
+
+    #[test]
+    fn resolve_secret_env_missing() {
+        assert!(resolve_secret("env:SKIFF_TEST_RESOLVE_SECRET_MISSING").is_err());
+    }
+
+    #[test]
+    fn resolve_secret_file_prefix() {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!(
+            "skiff-resolve-secret-test-{}",
+            std::process::id()
+        ));
+        std::fs::write(&path, "topsecret\n").unwrap();
+        let resolved = resolve_secret(&format!("file:{}", path.display())).unwrap();
+        assert_eq!(resolved, "topsecret");
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn resolve_secret_rejects_literal() {
+        let err = resolve_secret("literal-token-on-argv").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("env:VAR"));
+        assert!(msg.contains("file:/path"));
     }
 
     #[test]

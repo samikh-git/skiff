@@ -82,8 +82,23 @@ async fn daemon_main(config: DaemonConfig) -> Result<()> {
         },
     )?;
 
-    let listener = UnixListener::bind(&sock_path)
-        .map_err(|e| Error::runtime(format!("cannot bind session socket: {e}")))?;
+    // Narrow the umask around bind() so the socket never exists at
+    // umask-derived (potentially group/world-accessible) permissions in the
+    // window between bind() and chmod_0600() below. This is defense-in-depth
+    // only (every accepted connection is already checked against peer UID),
+    // but it's cheap to close. `umask` is process-wide and not thread-safe if
+    // other threads are concurrently creating files; this runs at daemon
+    // startup before the tokio listener/accept loop spawns any other threads
+    // that create files, so it's safe here.
+    #[cfg(unix)]
+    let prev_umask = unsafe { libc::umask(0o177) };
+    let bind_result = UnixListener::bind(&sock_path);
+    #[cfg(unix)]
+    unsafe {
+        libc::umask(prev_umask);
+    }
+    let listener =
+        bind_result.map_err(|e| Error::runtime(format!("cannot bind session socket: {e}")))?;
     chmod_0600(&sock_path)?;
     if let Some(parent) = sock_path.parent() {
         let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));

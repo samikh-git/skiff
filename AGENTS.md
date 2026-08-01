@@ -1,6 +1,6 @@
 # AGENTS.md — working on skiff
 
-Guidance for coding agents and humans extending this repo. Prefer this file plus [README.md](README.md) and [`.cursor/skills/skiff/`](.cursor/skills/skiff/) over inventing new CLI surfaces.
+Guidance for coding agents and humans extending this repo. Prefer this file plus [README.md](README.md) and [`skills/skiff/`](skills/skiff/) over inventing new CLI surfaces.
 
 ## Product goals
 
@@ -17,6 +17,7 @@ Guidance for coding agents and humans extending this repo. Prefer this file plus
 | `src/tools_index.rs` | Compact catalog index (v4 disk; postings in RAM) |
 | `src/session/` | Unix session daemon + NDJSON IPC |
 | `src/mcp/` | HTTP / SSE / stdio transports |
+| `skills/skiff/` | Agent skill (`npx skills add samikh-git/skiff`); `.cursor/skills/skiff` symlinks here |
 | `scripts/bench_vs_python.py` | Multi-run Rust vs upstream Python dataframe bench |
 | `tests/cloudflare_bench.rs` | Env-gated CF smoke bench |
 | `tests/token_efficiency.rs` | Local fixture token/size checks |
@@ -33,7 +34,7 @@ Guidance for coding agents and humans extending this repo. Prefer this file plus
 
 - `--agent` / `SKIFF_AGENT=1`: JSON; search ⇒ names + `--top 20`; else brief; spool default 64KiB.
 - `--json` = MCP **content-only**; `--envelope` / `--full` for wire `CallToolResult`.
-- Auth header form: `Authorization:Bearer <token>` (space after `Bearer`). Prefer `env:` / `file:` secret prefixes in docs/examples.
+- Auth header form: `Authorization:Bearer <token>` (space after `Bearer`). `env:` / `file:` secret prefixes are required for `--auth-header` and OAuth client id/secret values — literal secrets on argv are rejected at runtime.
 - Cache/config: `SKIFF_CACHE_DIR` / `SKIFF_CONFIG_DIR` → `~/.cache/skiff`, `~/.config/skiff`.
 - Do not commit `.env`, tokens, or cache dumps.
 
@@ -57,7 +58,7 @@ When changing discovery/index/session paths, re-run at least `tools_index` unit 
 ## Docs to keep in sync
 
 - User-facing: `README.md` (including bench table / limitations when numbers change materially).
-- Agent skill: `.cursor/skills/skiff/` (index description should match v4 + session RAM behavior).
+- Agent skill: `skills/skiff/` (index description should match v4 + session RAM behavior).
 - This file: architecture decisions agents must not casually reverse.
 
 ## Git / PR hygiene

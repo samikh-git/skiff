@@ -41,6 +41,11 @@ pub fn session_config_path(name: &str) -> PathBuf {
     sessions_dir().join(format!("{name}.config.json"))
 }
 
+/// Exclusive lockfile path used to serialize `session_start` for a given name.
+pub fn session_lock_path(name: &str) -> PathBuf {
+    sessions_dir().join(format!("{name}.lock"))
+}
+
 pub fn ensure_sessions_dir() -> Result<()> {
     crate::fsutil::ensure_dir_0700(&sessions_dir())
 }
@@ -88,6 +93,57 @@ pub fn unlink_session_files(name: &str) {
     ] {
         let _ = fs::remove_file(p);
     }
+}
+
+/// Try to acquire the exclusive start-lock for `name`. Returns `Ok(true)` if
+/// acquired, `Ok(false)` if another live process holds it. If the lockfile is
+/// stale (owner PID no longer alive), it is cleared and acquisition retried
+/// once so a crashed process can't wedge future starts forever.
+pub fn try_acquire_session_lock(name: &str) -> Result<bool> {
+    use std::io::Write;
+    let lock_path = session_lock_path(name);
+    for attempt in 0..2 {
+        let mut opts = fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        match opts.open(&lock_path) {
+            Ok(mut f) => {
+                let _ = write!(f, "{}", std::process::id());
+                let _ = f.sync_all();
+                return Ok(true);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                if attempt == 0 {
+                    // Check whether the lock owner is still alive; if not, it's
+                    // stale (e.g. a crashed process) and safe to clear.
+                    let stale = match fs::read_to_string(&lock_path) {
+                        Ok(s) => match s.trim().parse::<u32>() {
+                            Ok(pid) => !is_process_alive(pid),
+                            Err(_) => true,
+                        },
+                        Err(_) => true,
+                    };
+                    if stale {
+                        let _ = fs::remove_file(&lock_path);
+                        continue;
+                    }
+                    return Ok(false);
+                }
+                return Ok(false);
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(false)
+}
+
+/// Release the exclusive start-lock for `name`.
+pub fn release_session_lock(name: &str) {
+    let _ = fs::remove_file(session_lock_path(name));
 }
 
 /// If meta exists but PID is dead, clear leftovers. Returns true if cleaned.
