@@ -20,12 +20,12 @@ fn python() -> String {
     std::env::var("PYTHON").unwrap_or_else(|_| "python3".into())
 }
 
-fn mcp2cli() -> Command {
-    let mut cmd = Command::new(cargo_bin!("mcp2cli"));
+fn skiff() -> Command {
+    let mut cmd = Command::new(cargo_bin!("skiff"));
     let dir = tempdir().unwrap();
     let cache = dir.path().join("cache");
     std::fs::create_dir_all(&cache).unwrap();
-    cmd.env("MCP2CLI_CACHE_DIR", &cache);
+    cmd.env("SKIFF_CACHE_DIR", &cache);
     std::mem::forget(dir);
     cmd
 }
@@ -88,7 +88,7 @@ fn mcp_streamable_list_and_echo() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let server = HttpServer::start("mcp_http_server.py", "http://");
 
-    mcp2cli()
+    skiff()
         .args(["--mcp", &server.url, "--transport", "streamable", "--list"])
         .timeout(Duration::from_secs(45))
         .assert()
@@ -96,7 +96,7 @@ fn mcp_streamable_list_and_echo() {
         .stdout(predicate::str::contains("echo"))
         .stdout(predicate::str::contains("add-numbers"));
 
-    mcp2cli()
+    skiff()
         .args([
             "--mcp",
             &server.url,
@@ -111,7 +111,7 @@ fn mcp_streamable_list_and_echo() {
         .success()
         .stdout(predicate::str::contains("http test"));
 
-    mcp2cli()
+    skiff()
         .args([
             "--mcp",
             &server.url,
@@ -134,14 +134,14 @@ fn mcp_sse_list_and_echo() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let server = HttpServer::start("mcp_sse_server.py", "http://");
 
-    mcp2cli()
+    skiff()
         .args(["--mcp", &server.url, "--transport", "sse", "--list"])
         .timeout(Duration::from_secs(45))
         .assert()
         .success()
         .stdout(predicate::str::contains("echo"));
 
-    mcp2cli()
+    skiff()
         .args([
             "--mcp",
             &server.url,
@@ -163,7 +163,7 @@ fn mcp_auto_falls_back_to_sse() {
     // SSE-only URL: streamable should fail, auto should fall back.
     let server = HttpServer::start("mcp_sse_server.py", "http://");
 
-    mcp2cli()
+    skiff()
         .args(["--mcp", &server.url, "--transport", "auto", "--list"])
         .timeout(Duration::from_secs(45))
         .assert()

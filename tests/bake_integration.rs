@@ -50,9 +50,9 @@ impl IsolatedEnv {
     }
 
     fn cmd(&self) -> Command {
-        let mut cmd = Command::new(cargo_bin!("mcp2cli"));
-        cmd.env("MCP2CLI_CONFIG_DIR", &self.config);
-        cmd.env("MCP2CLI_CACHE_DIR", &self.cache);
+        let mut cmd = Command::new(cargo_bin!("skiff"));
+        cmd.env("SKIFF_CONFIG_DIR", &self.config);
+        cmd.env("SKIFF_CACHE_DIR", &self.cache);
         cmd
     }
 }

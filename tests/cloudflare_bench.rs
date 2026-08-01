@@ -2,7 +2,7 @@
 //!
 //! ```bash
 //! export CF_API_TOKEN=…   # or CLOUDFLARE_API_TOKEN via .env
-//! export MCP2CLI_BENCH_CF=1
+//! export SKIFF_BENCH_CF=1
 //! cargo test --test cloudflare_bench -- --ignored --nocapture
 //! ```
 
@@ -14,7 +14,7 @@ use tempfile::tempdir;
 
 fn enabled() -> bool {
     matches!(
-        std::env::var("MCP2CLI_BENCH_CF").as_deref(),
+        std::env::var("SKIFF_BENCH_CF").as_deref(),
         Ok("1") | Ok("true") | Ok("yes")
     ) && (std::env::var("CF_API_TOKEN").is_ok() || std::env::var("CLOUDFLARE_API_TOKEN").is_ok())
 }
@@ -25,9 +25,9 @@ fn token() -> String {
         .expect("CF_API_TOKEN")
 }
 
-fn mcp2cli_cached(cache: &std::path::Path) -> Command {
-    let mut cmd = Command::new(cargo_bin!("mcp2cli"));
-    cmd.env("MCP2CLI_CACHE_DIR", cache);
+fn skiff_cached(cache: &std::path::Path) -> Command {
+    let mut cmd = Command::new(cargo_bin!("skiff"));
+    cmd.env("SKIFF_CACHE_DIR", cache);
     cmd
 }
 
@@ -49,7 +49,7 @@ fn run(cache: &std::path::Path, args: &[&str]) -> RunOut {
     ];
     argv.extend_from_slice(args);
     let start = Instant::now();
-    let out = mcp2cli_cached(cache)
+    let out = skiff_cached(cache)
         .args(&argv)
         .timeout(Duration::from_secs(180))
         .assert()
@@ -75,14 +75,14 @@ fn print_row(label: &str, r: &RunOut) {
 }
 
 #[test]
-#[ignore = "set MCP2CLI_BENCH_CF=1 and CF_API_TOKEN"]
+#[ignore = "set SKIFF_BENCH_CF=1 and CF_API_TOKEN"]
 fn cloudflare_docs_progressive_discovery_bytes() {
     if !enabled() {
-        eprintln!("skip: MCP2CLI_BENCH_CF / token not set");
+        eprintln!("skip: SKIFF_BENCH_CF / token not set");
         return;
     }
 
-    let url = std::env::var("MCP2CLI_BENCH_URL")
+    let url = std::env::var("SKIFF_BENCH_URL")
         .unwrap_or_else(|_| "https://docs.mcp.cloudflare.com/mcp".into());
     let dir = tempdir().unwrap();
     let cache = dir.path().join("cache");
@@ -121,10 +121,10 @@ fn cloudflare_docs_progressive_discovery_bytes() {
 }
 
 #[test]
-#[ignore = "set MCP2CLI_BENCH_CF=1 and CF_API_TOKEN"]
+#[ignore = "set SKIFF_BENCH_CF=1 and CF_API_TOKEN"]
 fn cloudflare_code_mode_vs_fat_native() {
     if !enabled() {
-        eprintln!("skip: MCP2CLI_BENCH_CF / token not set");
+        eprintln!("skip: SKIFF_BENCH_CF / token not set");
         return;
     }
 

@@ -7,7 +7,7 @@ fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    if let Err(err) = mcp2cli::run(std::env::args_os().skip(1)) {
+    if let Err(err) = skiff::run(std::env::args_os().skip(1)) {
         eprintln!("Error: {err}");
         std::process::exit(err.exit_code());
     }

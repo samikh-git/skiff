@@ -65,15 +65,15 @@ impl Drop for GraphqlServer {
     }
 }
 
-fn mcp2cli_isolated() -> (Command, tempfile::TempDir) {
+fn skiff_isolated() -> (Command, tempfile::TempDir) {
     let dir = tempdir().unwrap();
     let cache = dir.path().join("cache");
     let config = dir.path().join("config");
     std::fs::create_dir_all(&cache).unwrap();
     std::fs::create_dir_all(&config).unwrap();
-    let mut cmd = Command::new(cargo_bin!("mcp2cli"));
-    cmd.env("MCP2CLI_CACHE_DIR", &cache);
-    cmd.env("MCP2CLI_CONFIG_DIR", &config);
+    let mut cmd = Command::new(cargo_bin!("skiff"));
+    cmd.env("SKIFF_CACHE_DIR", &cache);
+    cmd.env("SKIFF_CONFIG_DIR", &config);
     (cmd, dir)
 }
 
@@ -82,7 +82,7 @@ fn graphql_list_and_query() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let server = GraphqlServer::start();
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args(["--graphql", &server.url, "--list"])
         .timeout(Duration::from_secs(30))
         .assert()
@@ -90,14 +90,14 @@ fn graphql_list_and_query() {
         .stdout(predicate::str::contains("users"))
         .stdout(predicate::str::contains("create-user"));
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args(["--graphql", &server.url, "users"])
         .timeout(Duration::from_secs(30))
         .assert()
         .success()
         .stdout(predicate::str::contains("Alice"));
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args(["--graphql", &server.url, "user", "--id", "1"])
         .timeout(Duration::from_secs(30))
         .assert()
@@ -110,7 +110,7 @@ fn graphql_mutation_and_fields() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let server = GraphqlServer::start();
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args([
         "--graphql",
         &server.url,
@@ -125,7 +125,7 @@ fn graphql_mutation_and_fields() {
     .success()
     .stdout(predicate::str::contains("Charlie"));
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args([
         "--graphql",
         &server.url,
@@ -146,7 +146,7 @@ fn graphql_list_args_head_search_stdin() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let server = GraphqlServer::start();
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args(["--graphql", &server.url, "users-by-ids", "--ids", "1,2"])
         .timeout(Duration::from_secs(30))
         .assert()
@@ -154,13 +154,13 @@ fn graphql_list_args_head_search_stdin() {
         .stdout(predicate::str::contains("Alice"))
         .stdout(predicate::str::contains("Bob"));
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args(["--graphql", &server.url, "--head", "1", "users"])
         .timeout(Duration::from_secs(30))
         .assert()
         .success();
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args(["--graphql", &server.url, "--search", "create", "--list"])
         .timeout(Duration::from_secs(30))
         .assert()
@@ -168,7 +168,7 @@ fn graphql_list_args_head_search_stdin() {
         .stdout(predicate::str::contains("create-user"))
         .stdout(predicate::str::contains("users").not());
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args(["--graphql", &server.url, "create-user", "--stdin"])
         .write_stdin(r#"{"name":"Dana","email":"dana@example.com"}"#)
         .timeout(Duration::from_secs(30))
@@ -183,7 +183,7 @@ fn graphql_mutual_exclusion_and_missing_required() {
     let server = GraphqlServer::start();
     let petstore = fixtures_dir().join("petstore.json");
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args([
         "--graphql",
         &server.url,
@@ -195,7 +195,7 @@ fn graphql_mutual_exclusion_and_missing_required() {
     .failure()
     .stderr(predicate::str::contains("mutually exclusive"));
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args(["--graphql", &server.url, "user"])
         .timeout(Duration::from_secs(30))
         .assert()
@@ -213,9 +213,9 @@ fn graphql_bake_create_and_at_name() {
     std::fs::create_dir_all(&cache).unwrap();
     std::fs::create_dir_all(&config).unwrap();
 
-    Command::new(cargo_bin!("mcp2cli"))
-        .env("MCP2CLI_CACHE_DIR", &cache)
-        .env("MCP2CLI_CONFIG_DIR", &config)
+    Command::new(cargo_bin!("skiff"))
+        .env("SKIFF_CACHE_DIR", &cache)
+        .env("SKIFF_CONFIG_DIR", &config)
         .args([
             "bake",
             "create",
@@ -228,9 +228,9 @@ fn graphql_bake_create_and_at_name() {
         .assert()
         .success();
 
-    Command::new(cargo_bin!("mcp2cli"))
-        .env("MCP2CLI_CACHE_DIR", &cache)
-        .env("MCP2CLI_CONFIG_DIR", &config)
+    Command::new(cargo_bin!("skiff"))
+        .env("SKIFF_CACHE_DIR", &cache)
+        .env("SKIFF_CONFIG_DIR", &config)
         .args(["@gqlapi", "--list"])
         .timeout(Duration::from_secs(30))
         .assert()

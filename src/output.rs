@@ -103,7 +103,7 @@ fn spill_and_print_pointer(bytes: &[u8], kind: &str, preview: &str) -> io::Resul
     spool::maybe_clean_expired();
     let path = write_spool(bytes, kind).map_err(io::Error::other)?;
     eprintln!(
-        "mcp2cli: output {} bytes exceeded limit; spooled to {}",
+        "skiff: output {} bytes exceeded limit; spooled to {}",
         bytes.len(),
         path.display()
     );

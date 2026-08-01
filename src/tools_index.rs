@@ -405,7 +405,10 @@ mod tests {
         disk.postings.clear();
         disk.descs.clear();
         let v = serde_json::to_value(&disk).unwrap();
-        assert!(v.get("postings").is_none() || v.get("postings").unwrap().as_object().unwrap().is_empty());
+        assert!(
+            v.get("postings").is_none()
+                || v.get("postings").unwrap().as_object().unwrap().is_empty()
+        );
         let mut loaded: CompactIndex = serde_json::from_value(v).unwrap();
         assert!(loaded.postings.is_empty());
         rebuild_postings(&mut loaded);

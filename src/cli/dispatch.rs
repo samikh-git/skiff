@@ -62,7 +62,7 @@ fn dispatch_impl(argv: Vec<OsString>, bake_config: Option<BakeConfig>) -> Result
     let (value_opts, bool_opts) = global_option_sets();
     let (global_argv, tool_argv) = split_at_subcommand(&argv, &value_opts, &bool_opts);
 
-    let mut clap_argv = vec![OsString::from("mcp2cli")];
+    let mut clap_argv = vec![OsString::from("skiff")];
     clap_argv.extend(global_argv);
 
     let mut pre_args = GlobalArgs::try_parse_from(&clap_argv).map_err(|e| {
@@ -776,8 +776,7 @@ fn dispatch_session(
     let src_hash = source_hash_for(&format!("session:{name}"));
     let list_opts = ListOptions::from_global(pre, ListStyle::Mcp);
     let detail = pre.list_detail();
-    let use_light_index =
-        matches!(detail, ListDetail::Names) && pre.describe.is_none();
+    let use_light_index = matches!(detail, ListDetail::Names) && pre.describe.is_none();
     let needs_catalog = pre.list_commands
         || pre.describe.is_some()
         || remaining.is_empty()
@@ -802,8 +801,7 @@ fn dispatch_session(
         if let Some(pat) = &pre.search_pattern {
             params["search"] = Value::String(pat.clone());
         }
-        let tools_val =
-            crate::session::session_request(name, "list_tools_light", params)?;
+        let tools_val = crate::session::session_request(name, "list_tools_light", params)?;
         let tools = tools_val
             .as_array()
             .cloned()
@@ -937,17 +935,17 @@ fn dispatch_session(
 fn print_help() {
     eprintln!(
         "\
-mcp2cli {version} — Turn any MCP server, OpenAPI spec, or GraphQL endpoint into a CLI
+skiff {version} — Turn any MCP server, OpenAPI spec, or GraphQL endpoint into a CLI
 
 Usage:
-  mcp2cli --spec <URL|FILE> [--list] [command]
-  mcp2cli --mcp <URL> [--list] [command]
-  mcp2cli --mcp-stdio <CMD> [--list] [command]
-  mcp2cli --graphql <URL> [--list] [command]
-  mcp2cli --mcp-stdio <CMD> --session-start <NAME>
-  mcp2cli --session <NAME> [--list] [command]
-  mcp2cli bake <create|list|show|remove|update|install> ...
-  mcp2cli @<name> ...
+  skiff --spec <URL|FILE> [--list] [command]
+  skiff --mcp <URL> [--list] [command]
+  skiff --mcp-stdio <CMD> [--list] [command]
+  skiff --graphql <URL> [--list] [command]
+  skiff --mcp-stdio <CMD> --session-start <NAME>
+  skiff --session <NAME> [--list] [command]
+  skiff bake <create|list|show|remove|update|install> ...
+  skiff @<name> ...
 ",
         version = env!("CARGO_PKG_VERSION")
     );

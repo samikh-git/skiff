@@ -1,4 +1,4 @@
-# mcp2cli flags
+# skiff flags
 
 ## Sources (exactly one)
 
@@ -17,12 +17,12 @@
 | `--detail names\|brief\|full` | JSON list depth; `compact` ⇒ names; default `full` for `--json`, `brief` for `--agent` |
 | `--describe TOOL` | One-tool full schema |
 | `TOOL --help --json` | Same as describe for that tool |
-| `--agent` / `MCP2CLI_AGENT=1` | JSON; search ⇒ names + `--top 20`; else brief; spool |
+| `--agent` / `SKIFF_AGENT=1` | JSON; search ⇒ names + `--top 20`; else brief; spool |
 | `--json` | Structured JSON; MCP **content-only** |
 | `--envelope` / `--full` | Full MCP CallToolResult |
 | `--toon` | Native TOON (JSON fallback on encode fail) |
 | `--head N` | Truncate top-level JSON arrays |
-| `--max-bytes N` | Spill to `$MCP2CLI_CACHE_DIR/spool/` when over N (0 = never) |
+| `--max-bytes N` | Spill to `$SKIFF_CACHE_DIR/spool/` when over N (0 = never) |
 | `--inline` | Never spill |
 | `--spool-clean` | Delete expired spool files |
 
@@ -54,16 +54,16 @@
 
 | Env / path | Default |
 |------------|---------|
-| `MCP2CLI_CACHE_DIR` | `~/.cache/mcp2cli` |
-| `MCP2CLI_CONFIG_DIR` | `~/.config/mcp2cli` |
-| Sessions | `$MCP2CLI_CACHE_DIR/sessions/{name}.{sock,json,log}` |
-| Spool | `$MCP2CLI_CACHE_DIR/spool/` |
-| Tool index | `$MCP2CLI_CACHE_DIR/<key>_tools_index.json` (names/descriptions) |
-| OAuth | `$MCP2CLI_CACHE_DIR/oauth/<hash>/` |
-| Baked | `$MCP2CLI_CONFIG_DIR/baked.json` |
+| `SKIFF_CACHE_DIR` | `~/.cache/skiff` |
+| `SKIFF_CONFIG_DIR` | `~/.config/skiff` |
+| Sessions | `$SKIFF_CACHE_DIR/sessions/{name}.{sock,json,log}` |
+| Spool | `$SKIFF_CACHE_DIR/spool/` |
+| Tool index | `$SKIFF_CACHE_DIR/<key>_tools_index.json` (names/descriptions) |
+| OAuth | `$SKIFF_CACHE_DIR/oauth/<hash>/` |
+| Baked | `$SKIFF_CONFIG_DIR/baked.json` |
 
 ## Cloudflare bench
 
 ```bash
-CF_API_TOKEN=… MCP2CLI_BENCH_CF=1 cargo test --test cloudflare_bench -- --ignored --nocapture
+CF_API_TOKEN=… SKIFF_BENCH_CF=1 cargo test --test cloudflare_bench -- --ignored --nocapture
 ```

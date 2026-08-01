@@ -163,7 +163,7 @@ mod tests {
         let opts = OAuthOptions {
             client_id: Some("id".into()),
             client_secret: Some("sec".into()),
-            client_name: "mcp2cli".into(),
+            client_name: "skiff".into(),
             scope: None,
             redirect_uri: None,
             flow: OAuthFlow::Auto,

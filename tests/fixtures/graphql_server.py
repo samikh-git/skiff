@@ -1,5 +1,5 @@
 #! /usr/bin/env python3
-"""Minimal GraphQL HTTP fixture for mcp2cli integration tests.
+"""Minimal GraphQL HTTP fixture for skiff integration tests.
 
 Prints:
   PORT=<n>

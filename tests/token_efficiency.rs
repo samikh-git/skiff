@@ -19,12 +19,12 @@ fn python() -> String {
     std::env::var("PYTHON").unwrap_or_else(|_| "python3".into())
 }
 
-fn mcp2cli_with_cache() -> (Command, PathBuf) {
+fn skiff_with_cache() -> (Command, PathBuf) {
     let dir = tempdir().unwrap();
     let cache = dir.path().join("cache");
     std::fs::create_dir_all(&cache).unwrap();
-    let mut cmd = Command::new(cargo_bin!("mcp2cli"));
-    cmd.env("MCP2CLI_CACHE_DIR", &cache);
+    let mut cmd = Command::new(cargo_bin!("skiff"));
+    cmd.env("SKIFF_CACHE_DIR", &cache);
     std::mem::forget(dir);
     (cmd, cache)
 }
@@ -39,7 +39,7 @@ fn list_detail_names_brief_full_ordering() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();
 
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     let names = c
         .args(["--mcp-stdio", &cmd, "--list", "--json", "--detail", "names"])
         .timeout(Duration::from_secs(30))
@@ -49,7 +49,7 @@ fn list_detail_names_brief_full_ordering() {
         .stdout
         .clone();
 
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     let brief = c
         .args(["--mcp-stdio", &cmd, "--list", "--json", "--detail", "brief"])
         .timeout(Duration::from_secs(30))
@@ -59,7 +59,7 @@ fn list_detail_names_brief_full_ordering() {
         .stdout
         .clone();
 
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     let full = c
         .args(["--mcp-stdio", &cmd, "--list", "--json", "--detail", "full"])
         .timeout(Duration::from_secs(30))
@@ -88,7 +88,7 @@ fn help_json_and_describe() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();
 
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     let out = c
         .args(["--mcp-stdio", &cmd, "--json", "echo", "--help"])
         .timeout(Duration::from_secs(30))
@@ -105,7 +105,7 @@ fn help_json_and_describe() {
         .iter()
         .any(|p| p["name"] == "message"));
 
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     let out = c
         .args(["--mcp-stdio", &cmd, "--describe", "add-numbers", "--json"])
         .timeout(Duration::from_secs(30))
@@ -123,7 +123,7 @@ fn json_content_only_vs_envelope() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();
 
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     let content = c
         .args(["--mcp-stdio", &cmd, "--json", "echo", "--message", "hello"])
         .timeout(Duration::from_secs(30))
@@ -136,7 +136,7 @@ fn json_content_only_vs_envelope() {
     assert_eq!(v, "hello");
     assert!(v.get("content").is_none());
 
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     let env = c
         .args([
             "--mcp-stdio",
@@ -167,7 +167,7 @@ fn json_content_only_vs_envelope() {
 fn json_list_default_is_full_without_agent() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     let out = c
         .args(["--mcp-stdio", &cmd, "--list", "--json"])
         .timeout(Duration::from_secs(30))
@@ -187,7 +187,7 @@ fn json_list_default_is_full_without_agent() {
 fn fail_tool_exits_nonzero() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     c.args([
         "--mcp-stdio",
         &cmd,
@@ -206,7 +206,7 @@ fn fail_tool_exits_nonzero() {
 fn structured_only_returns_payload() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     let out = c
         .args([
             "--mcp-stdio",
@@ -232,7 +232,7 @@ fn native_toon_uniform_list() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();
 
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
     c.args([
         "--mcp-stdio",
         &cmd,
@@ -252,7 +252,7 @@ fn native_toon_uniform_list() {
 fn spool_on_max_bytes() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();
-    let (mut c, cache) = mcp2cli_with_cache();
+    let (mut c, cache) = skiff_with_cache();
 
     let out = c
         .args([
@@ -295,7 +295,7 @@ fn spool_on_max_bytes() {
 fn tiny_image_spools_not_inline_base64() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
 
     let out = c
         .args(["--mcp-stdio", &cmd, "--json", "tiny-image"])
@@ -317,7 +317,7 @@ fn tiny_image_spools_not_inline_base64() {
 fn agent_flag_implies_json_list() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();
-    let (mut c, _) = mcp2cli_with_cache();
+    let (mut c, _) = skiff_with_cache();
 
     let out = c
         .args(["--mcp-stdio", &cmd, "--agent", "--list"])

@@ -1,4 +1,4 @@
-//! Session directory layout under `~/.cache/mcp2cli/sessions/`.
+//! Session directory layout under `~/.cache/skiff/sessions/`.
 
 use std::fs;
 use std::path::{Path, PathBuf};

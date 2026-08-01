@@ -1,9 +1,9 @@
-//! mcp2cli — turn any MCP server, OpenAPI spec, or GraphQL endpoint into a CLI.
+//! skiff — turn any MCP server, OpenAPI spec, or GraphQL endpoint into a CLI.
 //!
 //! Library entry is [`run`]. The binary is a thin wrapper; session daemons reuse
 //! the same binary via the hidden `__session_daemon <config-path>` argv form.
 //!
-//! Rust port of <https://github.com/knowsuchagency/mcp2cli>.
+//! Inspired by <https://github.com/knowsuchagency/mcp2cli> (Python prior art).
 
 pub mod bake;
 pub mod cache;
@@ -33,7 +33,7 @@ use std::path::PathBuf;
 /// Run the CLI with `argv` (no program name). Returns [`Error`] for exit mapping.
 pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<()> {
     let args: Vec<OsString> = args.into_iter().collect();
-    // Hidden daemon entry: mcp2cli __session_daemon <config-path>
+    // Hidden daemon entry: skiff __session_daemon <config-path>
     if args.first().and_then(|a| a.to_str()) == Some("__session_daemon") {
         #[cfg(unix)]
         {

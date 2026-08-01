@@ -44,8 +44,8 @@ impl IsolatedEnv {
     }
 
     fn cmd(&self) -> Command {
-        let mut cmd = Command::new(cargo_bin!("mcp2cli"));
-        cmd.env("MCP2CLI_CACHE_DIR", &self.cache);
+        let mut cmd = Command::new(cargo_bin!("skiff"));
+        cmd.env("SKIFF_CACHE_DIR", &self.cache);
         cmd
     }
 
@@ -249,10 +249,10 @@ fn bake_session_emits_flag() {
     std::fs::create_dir_all(&config).unwrap();
     std::fs::create_dir_all(&cache).unwrap();
 
-    let mut create = Command::new(cargo_bin!("mcp2cli"));
+    let mut create = Command::new(cargo_bin!("skiff"));
     create
-        .env("MCP2CLI_CONFIG_DIR", &config)
-        .env("MCP2CLI_CACHE_DIR", &cache)
+        .env("SKIFF_CONFIG_DIR", &config)
+        .env("SKIFF_CACHE_DIR", &cache)
         .args([
             "bake",
             "create",
@@ -265,10 +265,10 @@ fn bake_session_emits_flag() {
         .assert()
         .success();
 
-    let mut show = Command::new(cargo_bin!("mcp2cli"));
+    let mut show = Command::new(cargo_bin!("skiff"));
     let out = show
-        .env("MCP2CLI_CONFIG_DIR", &config)
-        .env("MCP2CLI_CACHE_DIR", &cache)
+        .env("SKIFF_CONFIG_DIR", &config)
+        .env("SKIFF_CACHE_DIR", &cache)
         .args(["bake", "show", "sessbake"])
         .assert()
         .success()

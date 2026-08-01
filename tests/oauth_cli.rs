@@ -5,22 +5,22 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use tempfile::tempdir;
 
-fn mcp2cli() -> Command {
-    let mut cmd = Command::new(cargo_bin!("mcp2cli"));
+fn skiff() -> Command {
+    let mut cmd = Command::new(cargo_bin!("skiff"));
     let dir = tempdir().unwrap();
     let cache = dir.path().join("cache");
     let config = dir.path().join("config");
     std::fs::create_dir_all(&cache).unwrap();
     std::fs::create_dir_all(&config).unwrap();
-    cmd.env("MCP2CLI_CACHE_DIR", &cache);
-    cmd.env("MCP2CLI_CONFIG_DIR", &config);
+    cmd.env("SKIFF_CACHE_DIR", &cache);
+    cmd.env("SKIFF_CONFIG_DIR", &config);
     std::mem::forget(dir);
     cmd
 }
 
 #[test]
 fn oauth_secret_requires_client_id() {
-    mcp2cli()
+    skiff()
         .args([
             "--mcp",
             "http://127.0.0.1:9/mcp",
@@ -35,7 +35,7 @@ fn oauth_secret_requires_client_id() {
 
 #[test]
 fn oauth_rejected_with_stdio() {
-    mcp2cli()
+    skiff()
         .args(["--mcp-stdio", "echo hi", "--oauth", "--list"])
         .assert()
         .failure()
@@ -44,7 +44,7 @@ fn oauth_rejected_with_stdio() {
 
 #[test]
 fn oauth_redirect_https_rejected() {
-    mcp2cli()
+    skiff()
         .args([
             "--mcp",
             "http://127.0.0.1:9/mcp",
@@ -60,12 +60,12 @@ fn oauth_redirect_https_rejected() {
 
 #[test]
 fn oauth_clear_requires_discovery_url() {
-    mcp2cli().args(["--oauth-clear"]).assert().failure();
+    skiff().args(["--oauth-clear"]).assert().failure();
 }
 
 #[test]
 fn oauth_clear_with_mcp_url() {
-    mcp2cli()
+    skiff()
         .args(["--mcp", "http://127.0.0.1:9/mcp", "--oauth-clear"])
         .assert()
         .success()
@@ -80,9 +80,9 @@ fn bake_show_masks_oauth_client_secret() {
     std::fs::create_dir_all(&config).unwrap();
     std::fs::create_dir_all(&cache).unwrap();
 
-    Command::new(cargo_bin!("mcp2cli"))
-        .env("MCP2CLI_CONFIG_DIR", &config)
-        .env("MCP2CLI_CACHE_DIR", &cache)
+    Command::new(cargo_bin!("skiff"))
+        .env("SKIFF_CONFIG_DIR", &config)
+        .env("SKIFF_CACHE_DIR", &cache)
         .args([
             "bake",
             "create",
@@ -98,9 +98,9 @@ fn bake_show_masks_oauth_client_secret() {
         .assert()
         .success();
 
-    let out = Command::new(cargo_bin!("mcp2cli"))
-        .env("MCP2CLI_CONFIG_DIR", &config)
-        .env("MCP2CLI_CACHE_DIR", &cache)
+    let out = Command::new(cargo_bin!("skiff"))
+        .env("SKIFF_CONFIG_DIR", &config)
+        .env("SKIFF_CACHE_DIR", &cache)
         .args(["bake", "show", "oauthed"])
         .assert()
         .success()
@@ -120,9 +120,9 @@ fn bake_show_keeps_env_secret_prefix() {
     std::fs::create_dir_all(&config).unwrap();
     std::fs::create_dir_all(&cache).unwrap();
 
-    Command::new(cargo_bin!("mcp2cli"))
-        .env("MCP2CLI_CONFIG_DIR", &config)
-        .env("MCP2CLI_CACHE_DIR", &cache)
+    Command::new(cargo_bin!("skiff"))
+        .env("SKIFF_CONFIG_DIR", &config)
+        .env("SKIFF_CACHE_DIR", &cache)
         .args([
             "bake",
             "create",
@@ -137,9 +137,9 @@ fn bake_show_keeps_env_secret_prefix() {
         .assert()
         .success();
 
-    let out = Command::new(cargo_bin!("mcp2cli"))
-        .env("MCP2CLI_CONFIG_DIR", &config)
-        .env("MCP2CLI_CACHE_DIR", &cache)
+    let out = Command::new(cargo_bin!("skiff"))
+        .env("SKIFF_CONFIG_DIR", &config)
+        .env("SKIFF_CACHE_DIR", &cache)
         .args(["bake", "show", "envsec"])
         .assert()
         .success()

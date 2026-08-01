@@ -82,7 +82,7 @@ fn session_start_unix(config: DaemonConfig) -> Result<()> {
     chmod_0600(&log_path)?;
 
     let exe = std::env::current_exe()
-        .map_err(|e| Error::runtime(format!("cannot resolve mcp2cli binary: {e}")))?;
+        .map_err(|e| Error::runtime(format!("cannot resolve skiff binary: {e}")))?;
 
     let mut cmd = Command::new(&exe);
     cmd.arg("__session_daemon")
@@ -240,7 +240,7 @@ pub fn resolve_idle_secs(cli: Option<u64>) -> u64 {
     if let Some(v) = cli {
         return v;
     }
-    if let Ok(v) = std::env::var("MCP2CLI_SESSION_IDLE_SECS") {
+    if let Ok(v) = std::env::var("SKIFF_SESSION_IDLE_SECS") {
         if let Ok(n) = v.parse::<u64>() {
             return n;
         }

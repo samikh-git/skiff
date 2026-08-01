@@ -1,8 +1,8 @@
 //! Cache and config directory resolution (Python-compatible layout).
 //!
-//! - Cache: `$MCP2CLI_CACHE_DIR` or `~/.cache/mcp2cli` (tool lists, GraphQL/OpenAPI,
+//! - Cache: `$SKIFF_CACHE_DIR` or `~/.cache/skiff` (tool lists, GraphQL/OpenAPI,
 //!   OAuth, sessions, usage)
-//! - Config: `$MCP2CLI_CONFIG_DIR` or `~/.config/mcp2cli` (`baked.json`)
+//! - Config: `$SKIFF_CONFIG_DIR` or `~/.config/skiff` (`baked.json`)
 //!
 //! Tests may override via [`set_cache_dir_override`] / [`set_config_dir_override`]
 //! under [`TEST_PATHS_LOCK`].
@@ -31,12 +31,12 @@ pub fn cache_dir() -> PathBuf {
     {
         return p;
     }
-    if let Ok(p) = std::env::var("MCP2CLI_CACHE_DIR") {
+    if let Ok(p) = std::env::var("SKIFF_CACHE_DIR") {
         return PathBuf::from(p);
     }
     home_dir()
-        .map(|h| h.join(".cache").join("mcp2cli"))
-        .unwrap_or_else(|| PathBuf::from(".cache/mcp2cli"))
+        .map(|h| h.join(".cache").join("skiff"))
+        .unwrap_or_else(|| PathBuf::from(".cache/skiff"))
 }
 
 pub fn config_dir() -> PathBuf {
@@ -47,12 +47,12 @@ pub fn config_dir() -> PathBuf {
     {
         return p;
     }
-    if let Ok(p) = std::env::var("MCP2CLI_CONFIG_DIR") {
+    if let Ok(p) = std::env::var("SKIFF_CONFIG_DIR") {
         return PathBuf::from(p);
     }
     home_dir()
-        .map(|h| h.join(".config").join("mcp2cli"))
-        .unwrap_or_else(|| PathBuf::from(".config/mcp2cli"))
+        .map(|h| h.join(".config").join("skiff"))
+        .unwrap_or_else(|| PathBuf::from(".config/skiff"))
 }
 
 pub fn usage_file() -> PathBuf {

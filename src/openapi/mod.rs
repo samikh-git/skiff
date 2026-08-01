@@ -1,6 +1,6 @@
 //! OpenAPI `$ref` resolution, command extraction, and HTTP execution.
 //!
-//! Specs load from file or URL (URL responses cached under `$MCP2CLI_CACHE_DIR`).
+//! Specs load from file or URL (URL responses cached under `$SKIFF_CACHE_DIR`).
 //! Remote fetches are not SSRF-sandboxed — only pass trusted URLs.
 
 mod execute;

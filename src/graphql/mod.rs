@@ -1,6 +1,6 @@
 //! GraphQL introspection → CLI commands → execute.
 //!
-//! Introspection results are cached like OpenAPI (`$MCP2CLI_CACHE_DIR`). Use
+//! Introspection results are cached like OpenAPI (`$SKIFF_CACHE_DIR`). Use
 //! `--fields` to override the auto-built selection set.
 
 mod execute;

@@ -14,7 +14,7 @@ pub const DEFAULT_AGENT_SEARCH_TOP: usize = 20;
 
 #[derive(Debug, Clone, Parser)]
 #[command(
-    name = "mcp2cli",
+    name = "skiff",
     about = "Turn any MCP server, OpenAPI spec, or GraphQL endpoint into a CLI",
     version,
     disable_help_subcommand = true,
@@ -121,7 +121,7 @@ pub struct GlobalArgs {
     #[arg(long)]
     pub inline: bool,
 
-    /// Agent defaults: JSON, brief discovery, spool oversize (or MCP2CLI_AGENT=1)
+    /// Agent defaults: JSON, brief discovery, spool oversize (or SKIFF_AGENT=1)
     #[arg(long)]
     pub agent: bool,
 
@@ -154,7 +154,7 @@ pub struct GlobalArgs {
     pub oauth_client_secret: Option<String>,
 
     /// OAuth client name for DCR
-    #[arg(long, default_value = "mcp2cli")]
+    #[arg(long, default_value = "skiff")]
     pub oauth_client_name: String,
 
     /// OAuth scope string
@@ -223,9 +223,9 @@ pub struct GlobalArgs {
 }
 
 impl GlobalArgs {
-    /// Apply `--agent` / `MCP2CLI_AGENT=1` defaults (idempotent).
+    /// Apply `--agent` / `SKIFF_AGENT=1` defaults (idempotent).
     pub fn apply_agent_defaults(&mut self) {
-        let env_agent = std::env::var("MCP2CLI_AGENT")
+        let env_agent = std::env::var("SKIFF_AGENT")
             .map(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
             .unwrap_or(false);
         if !self.agent && !env_agent {

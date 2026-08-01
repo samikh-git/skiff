@@ -82,12 +82,12 @@ impl Drop for OAuthServer {
     }
 }
 
-fn mcp2cli_isolated() -> (Command, tempfile::TempDir) {
+fn skiff_isolated() -> (Command, tempfile::TempDir) {
     let dir = tempdir().unwrap();
     let cache = dir.path().join("cache");
     std::fs::create_dir_all(&cache).unwrap();
-    let mut cmd = Command::new(cargo_bin!("mcp2cli"));
-    cmd.env("MCP2CLI_CACHE_DIR", &cache);
+    let mut cmd = Command::new(cargo_bin!("skiff"));
+    cmd.env("SKIFF_CACHE_DIR", &cache);
     (cmd, dir)
 }
 
@@ -96,7 +96,7 @@ fn oauth_client_credentials_list_and_echo() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let server = OAuthServer::start();
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args([
         "--mcp",
         &server.url,
@@ -115,7 +115,7 @@ fn oauth_client_credentials_list_and_echo() {
     .success()
     .stdout(predicate::str::contains("echo"));
 
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args([
         "--mcp",
         &server.url,
@@ -141,7 +141,7 @@ fn oauth_list_without_creds_fails() {
     let server = OAuthServer::start();
 
     // No OAuth: should not get past Bearer gate (or fail discovery/connect).
-    let (mut cmd, _dir) = mcp2cli_isolated();
+    let (mut cmd, _dir) = skiff_isolated();
     cmd.args(["--mcp", &server.url, "--transport", "streamable", "--list"])
         .timeout(Duration::from_secs(45))
         .assert()

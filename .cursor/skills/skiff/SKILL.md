@@ -1,15 +1,15 @@
 ---
-name: mcp2cli
+name: skiff
 description: >-
   Turn any MCP server, OpenAPI spec, or GraphQL endpoint into a CLI via the
-  Rust mcp2cli binary. Use when calling MCP tools, listing OpenAPI/GraphQL
+  Rust skiff binary. Use when calling MCP tools, listing OpenAPI/GraphQL
   operations, bake/@name configs, session daemons, or token-efficient agent
-  discovery (--agent, --detail, --describe, spool). Triggers: mcp2cli, --mcp,
+  discovery (--agent, --detail, --describe, spool). Triggers: skiff, --mcp,
   --mcp-stdio, --spec, --graphql, bake, @name, session-start, --agent,
   "list tools from this server".
 ---
 
-# mcp2cli (Rust)
+# skiff
 
 Prefer this CLI over one-off HTTP clients when discovering or calling remote tools. No codegen.
 
@@ -17,7 +17,7 @@ Prefer this CLI over one-off HTTP clients when discovering or calling remote too
 
 ```bash
 cargo build --release
-export MCP2CLI=./target/release/mcp2cli   # or: cargo install --path .
+export SKIFF=./target/release/skiff   # or: cargo install --path .
 ```
 
 ## Workflow (token-efficient / agent)
@@ -37,7 +37,7 @@ $MCP2CLI --spec ./openapi.json --base-url https://api.example.com list-pets --li
 $MCP2CLI --graphql https://api.example.com/graphql --fields "id name" user --id 1
 ```
 
-`--agent` / `MCP2CLI_AGENT=1`: JSON; `--search` ⇒ `--detail names` + `--top 20`; otherwise brief list; spill oversize to spool (64KiB).
+`--agent` / `SKIFF_AGENT=1`: JSON; `--search` ⇒ `--detail names` + `--top 20`; otherwise brief list; spill oversize to spool (64KiB).
 
 | Flag | Role |
 |------|------|
@@ -53,9 +53,9 @@ Name lists may use **prefix compression**:
 
 ### How search stays fast (local index)
 
-MCP `list_tools` returns **every** tool with full `inputSchema` (multi‑MB on fat APIs). mcp2cli:
+MCP `list_tools` returns **every** tool with full `inputSchema` (multi‑MB on fat APIs). skiff:
 
-1. Caches the full list under `$MCP2CLI_CACHE_DIR`
+1. Caches the full list under `$SKIFF_CACHE_DIR`
 2. Writes a slim **v4** `*_tools_index.json` (sorted names + sparse tool-name overrides; postings rebuilt in RAM)
 3. Warm `--search` / `--detail names` reads the **index**, not full schemas
 4. With `--session`, the daemon keeps `CompactIndex` in RAM and serves `list_tools_light` (search in-process)
@@ -78,7 +78,7 @@ $MCP2CLI --session-stop myfs
 | Socket missing | `--session-start` first |
 | MCP child died | `--session-stop` then start again |
 | Untrusted stdio server | add `--session-clean-env` |
-| Idle leak | default 1800s; override `--session-idle-secs` / `MCP2CLI_SESSION_IDLE_SECS` |
+| Idle leak | default 1800s; override `--session-idle-secs` / `SKIFF_SESSION_IDLE_SECS` |
 
 ## Bake
 
@@ -105,7 +105,7 @@ No mid-session OAuth refresh — restart the session if the token expires.
 
 ```bash
 export CF_API_TOKEN=…
-export MCP2CLI_BENCH_CF=1
+export SKIFF_BENCH_CF=1
 cargo test --test cloudflare_bench -- --ignored --nocapture
 ```
 
@@ -115,7 +115,7 @@ cargo test --test cloudflare_bench -- --ignored --nocapture
 - Do: grep spooled paths; use `--envelope` only when you need the wire form
 - Don't: dump full `--detail full` catalogs into agent context
 - Don't: pass untrusted remote URLs (no SSRF sandbox)
-- Don't: put `MCP2CLI_CACHE_DIR` on a world-writable share
+- Don't: put `SKIFF_CACHE_DIR` on a world-writable share
 
 ## Wrap an API as a skill
 

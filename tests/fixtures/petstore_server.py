@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Petstore HTTP server for mcp2cli integration tests (upstream conftest)."""
+"""Petstore HTTP server for skiff integration tests (upstream conftest)."""
 from __future__ import annotations
 import json
 import sys

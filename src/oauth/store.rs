@@ -1,4 +1,4 @@
-//! File-backed `CredentialStore` under `~/.cache/mcp2cli/oauth/<hash>/`.
+//! File-backed `CredentialStore` under `~/.cache/skiff/oauth/<hash>/`.
 
 use std::fs;
 use std::path::{Path, PathBuf};

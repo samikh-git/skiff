@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Compare Rust mcp2cli vs upstream Python mcp2cli (multi-run → dataframe).
+"""Compare Rust skiff vs upstream Python mcp2cli (multi-run → dataframe).
 
 Requires:
   - CF_API_TOKEN or CLOUDFLARE_API_TOKEN (or a project .env with either)
-  - Rust binary: MCP2CLI_RUST_BIN or ./target/release/mcp2cli
-  - Python CLI: MCP2CLI_PYTHON_BIN or `uvx mcp2cli`
+  - Rust binary: SKIFF_BIN or ./target/release/skiff
+  - Python CLI: SKIFF_PYTHON_BIN or `uvx mcp2cli`
   - pandas (`pip install pandas` / `uv pip install pandas`)
 
 Example:
@@ -55,13 +55,13 @@ def auth_header() -> str:
 
 
 def resolve_rust_bin() -> str:
-    env = os.environ.get("MCP2CLI_RUST_BIN")
+    env = os.environ.get("SKIFF_BIN") or os.environ.get("SKIFF_RUST_BIN")
     if env:
         return env
-    cand = ROOT / "target" / "release" / "mcp2cli"
+    cand = ROOT / "target" / "release" / "skiff"
     if cand.is_file():
         return str(cand)
-    print("Building release mcp2cli…", file=sys.stderr)
+    print("Building release skiff…", file=sys.stderr)
     subprocess.run(
         ["cargo", "build", "--release"],
         cwd=ROOT,
@@ -74,14 +74,14 @@ def resolve_rust_bin() -> str:
 
 
 def resolve_python_bin() -> list[str]:
-    env = os.environ.get("MCP2CLI_PYTHON_BIN")
+    env = os.environ.get("SKIFF_PYTHON_BIN")
     if env:
         return env.split()
     if shutil.which("uvx"):
         # Plain `uvx mcp2cli` can pull an mcp SDK that renamed streamablehttp_client.
         # Pin a known-good transport for fair HTTP streamable benches.
         return ["uvx", "--with", "mcp==1.12.0", "mcp2cli"]
-    sys.exit("Set MCP2CLI_PYTHON_BIN or install uv (`uvx mcp2cli`)")
+    sys.exit("Set SKIFF_PYTHON_BIN or install uv (`uvx mcp2cli`)")
 
 
 def approx_tokens(n_bytes: int) -> int:
@@ -94,9 +94,9 @@ def run_once(
     cache_dir: Path,
     timeout: float = 180.0,
 ) -> dict[str, Any]:
-    env = {**os.environ, "MCP2CLI_CACHE_DIR": str(cache_dir)}
+    env = {**os.environ, "SKIFF_CACHE_DIR": str(cache_dir)}
     # Avoid agent env leaking into fair comparisons.
-    env.pop("MCP2CLI_AGENT", None)
+    env.pop("SKIFF_AGENT", None)
     t0 = time.perf_counter()
     try:
         proc = subprocess.run(
@@ -178,8 +178,8 @@ def main() -> int:
     ]
 
     rows: list[dict[str, Any]] = []
-    rust_cache = Path(tempfile.mkdtemp(prefix="mcp2cli-rust-bench-"))
-    py_cache = Path(tempfile.mkdtemp(prefix="mcp2cli-py-bench-"))
+    rust_cache = Path(tempfile.mkdtemp(prefix="skiff-rust-bench-"))
+    py_cache = Path(tempfile.mkdtemp(prefix="skiff-py-bench-"))
 
     print(f"rust={rust}")
     print(f"python={' '.join(py) if py else '(skipped)'}")
@@ -244,7 +244,7 @@ def main() -> int:
 
     # Rust-only session search path
     if not args.skip_session:
-        sess_cache = Path(tempfile.mkdtemp(prefix="mcp2cli-sess-bench-"))
+        sess_cache = Path(tempfile.mkdtemp(prefix="skiff-sess-bench-"))
         sess_name = "benchfat"
         start = run_once(
             [

@@ -32,7 +32,7 @@ fn spool_base64_blob(data_b64: &str, mime: &str, kind: &str) -> Result<Value> {
         .unwrap_or_else(|_| data_b64.as_bytes().to_vec());
     let path = write_spool(&raw, "bin")?;
     eprintln!(
-        "mcp2cli: spooled {kind} content ({mime}, {} bytes) to {}",
+        "skiff: spooled {kind} content ({mime}, {} bytes) to {}",
         raw.len(),
         path.display()
     );

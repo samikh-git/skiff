@@ -1,4 +1,4 @@
-//! Spill large / binary MCP payloads to `$MCP2CLI_CACHE_DIR/spool/` for agent grep.
+//! Spill large / binary MCP payloads to `$SKIFF_CACHE_DIR/spool/` for agent grep.
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};

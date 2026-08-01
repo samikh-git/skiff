@@ -1,4 +1,4 @@
-//! Atomic JSON cache under `$MCP2CLI_CACHE_DIR`.
+//! Atomic JSON cache under `$SKIFF_CACHE_DIR`.
 //!
 //! Writes use [`crate::fsutil::atomic_write_0600`]. Cache keys hash connection
 //! config (excluding filter/TTL fields).

@@ -1,21 +1,21 @@
 [package]
-name = "mcp2cli"
+name = "skiff"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.80"
-description = "Turn any MCP server or OpenAPI spec into a CLI — at runtime, with zero codegen"
+description = "Progressive MCP / OpenAPI / GraphQL CLI for agents — fast warm discovery, sessions, spool"
 license = "MIT"
 readme = "README.md"
-authors = ["Stephan Fitzpatrick"]
-repository = "https://github.com/knowsuchagency/mcp2cli"
-homepage = "https://github.com/knowsuchagency/mcp2cli"
+authors = ["Sami Khayatei Houssaini"]
+repository = "https://github.com/samikh-git/skiff"
+homepage = "https://github.com/samikh-git/skiff"
 keywords = ["mcp", "cli", "openapi", "graphql", "ai"]
 categories = ["command-line-utilities"]
 exclude = [".tmp/", "target/"]
 
 [[bin]]
-name = "mcp2cli"
-path = "src/bin/mcp2cli.rs"
+name = "skiff"
+path = "src/bin/skiff.rs"
 
 [dependencies]
 anyhow = "1"

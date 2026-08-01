@@ -1,4 +1,4 @@
-//! Bake mode — named connection configs in `$MCP2CLI_CONFIG_DIR/baked.json`.
+//! Bake mode — named connection configs in `$SKIFF_CONFIG_DIR/baked.json`.
 //!
 //! `@name` expands via [`BakedTool::to_argv`]. Prefer `env:`/`file:` secrets;
 //! [`BakedTool::masked_for_display`] is used by `bake show`.
@@ -83,11 +83,11 @@ fn default_transport() -> String {
 }
 
 fn default_oauth_client_name() -> String {
-    "mcp2cli".into()
+    "skiff".into()
 }
 
 fn is_default_oauth_client_name(s: &str) -> bool {
-    s == "mcp2cli"
+    s == "skiff"
 }
 
 fn default_oauth_flow() -> String {
@@ -189,7 +189,7 @@ impl BakedTool {
             argv.push("--oauth-client-secret".into());
             argv.push(sec.clone());
         }
-        if self.oauth_client_name != "mcp2cli" {
+        if self.oauth_client_name != "skiff" {
             argv.push("--oauth-client-name".into());
             argv.push(self.oauth_client_name.clone());
         }
@@ -369,15 +369,15 @@ fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn resolve_mcp2cli_bin() -> String {
+fn resolve_skiff_bin() -> String {
     if let Ok(exe) = std::env::current_exe() {
         return exe.to_string_lossy().into_owned();
     }
-    which_mcp2cli().unwrap_or_else(|| "mcp2cli".into())
+    which_skiff().unwrap_or_else(|| "skiff".into())
 }
 
-fn which_mcp2cli() -> Option<String> {
-    let output = StdCommand::new("which").arg("mcp2cli").output().ok()?;
+fn which_skiff() -> Option<String> {
+    let output = StdCommand::new("which").arg("skiff").output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -397,7 +397,7 @@ fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\"'\"'"))
 }
 
-/// Install a shell wrapper that runs `mcp2cli @name "$@"`.
+/// Install a shell wrapper that runs `skiff @name "$@"`.
 pub fn install_wrapper(name: &str, dir: Option<&Path>) -> Result<PathBuf> {
     let _ = require_baked(name)?;
     let bin_dir = match dir {
@@ -408,7 +408,7 @@ pub fn install_wrapper(name: &str, dir: Option<&Path>) -> Result<PathBuf> {
     };
     fs::create_dir_all(&bin_dir)?;
     let wrapper = bin_dir.join(name);
-    let bin = resolve_mcp2cli_bin();
+    let bin = resolve_skiff_bin();
     let content = format!("#!/bin/sh\nexec {} @{} \"$@\"\n", shell_quote(&bin), name);
     fs::write(&wrapper, content)?;
     #[cfg(unix)]

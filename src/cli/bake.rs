@@ -1,4 +1,4 @@
-//! `mcp2cli bake` subcommand handlers.
+//! `skiff bake` subcommand handlers.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -15,7 +15,7 @@ use crate::paths::DEFAULT_CACHE_TTL;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "mcp2cli bake",
+    name = "skiff bake",
     about = "Manage saved connection settings",
     disable_help_subcommand = true
 )]
@@ -69,7 +69,7 @@ struct CreateArgs {
     oauth_client_id: Option<String>,
     #[arg(long)]
     oauth_client_secret: Option<String>,
-    #[arg(long, default_value = "mcp2cli")]
+    #[arg(long, default_value = "skiff")]
     oauth_client_name: String,
     #[arg(long)]
     oauth_scope: Option<String>,
@@ -121,7 +121,7 @@ struct InstallArgs {
 }
 
 pub fn handle_bake(argv: &[OsString]) -> Result<()> {
-    let mut clap_argv = vec![OsString::from("mcp2cli bake")];
+    let mut clap_argv = vec![OsString::from("skiff bake")];
     clap_argv.extend_from_slice(argv);
 
     let cli = BakeCli::try_parse_from(&clap_argv).map_err(|e| {
@@ -157,7 +157,7 @@ pub fn handle_bake(argv: &[OsString]) -> Result<()> {
 }
 
 fn print_bake_help() {
-    println!("Usage: mcp2cli bake [options]\n");
+    println!("Usage: skiff bake [options]\n");
     println!("Commands:");
     println!("  create    Save connection settings as a named baked tool");
     println!("  list      List all baked tools");
@@ -165,7 +165,7 @@ fn print_bake_help() {
     println!("  remove    Delete a baked tool");
     println!("  update    Update settings on an existing baked tool");
     println!("  install   Create a ~/.local/bin wrapper script");
-    println!("\nRun 'mcp2cli bake <command> --help' for command-specific help.");
+    println!("\nRun 'skiff bake <command> --help' for command-specific help.");
 }
 
 fn bake_create(args: CreateArgs) -> Result<()> {

@@ -65,13 +65,13 @@ impl Drop for Petstore {
     }
 }
 
-fn mcp2cli() -> Command {
-    let mut cmd = Command::new(cargo_bin!("mcp2cli"));
+fn skiff() -> Command {
+    let mut cmd = Command::new(cargo_bin!("skiff"));
     let dir = tempdir().unwrap();
     // Keep cache isolated; leak dir for process lifetime of this command (ok in tests).
     let cache = dir.path().join("cache");
     std::fs::create_dir_all(&cache).unwrap();
-    cmd.env("MCP2CLI_CACHE_DIR", &cache);
+    cmd.env("SKIFF_CACHE_DIR", &cache);
     // Prevent tempfile from deleting before command runs by keeping ownership in env side channel —
     // use a unique path under /tmp via std instead:
     std::mem::forget(dir);
@@ -85,14 +85,14 @@ fn openapi_list_and_get_pet() {
     let spec = format!("{}/openapi.json", server.base);
     let base = format!("{}/api/v1", server.base);
 
-    mcp2cli()
+    skiff()
         .args(["--spec", &spec, "--base-url", &base, "--list"])
         .assert()
         .success()
         .stdout(predicate::str::contains("list-pets"))
         .stdout(predicate::str::contains("create-pet"));
 
-    let out = mcp2cli()
+    let out = skiff()
         .args([
             "--spec",
             &spec,
@@ -119,7 +119,7 @@ fn openapi_list_pets_limit_and_create() {
     let spec = format!("{}/openapi.json", server.base);
     let base = format!("{}/api/v1", server.base);
 
-    let out = mcp2cli()
+    let out = skiff()
         .args([
             "--spec",
             &spec,
@@ -137,7 +137,7 @@ fn openapi_list_pets_limit_and_create() {
     let data: Value = serde_json::from_slice(&out).unwrap();
     assert_eq!(data.as_array().unwrap().len(), 1);
 
-    let out = mcp2cli()
+    let out = skiff()
         .args([
             "--spec",
             &spec,
@@ -163,7 +163,7 @@ fn openapi_list_pets_limit_and_create() {
 fn openapi_load_local_json_file() {
     let spec = fixtures_dir().join("petstore.json");
     let data =
-        mcp2cli::openapi::load_openapi_spec(spec.to_str().unwrap(), &[], None, Some(3600), false)
+        skiff::openapi::load_openapi_spec(spec.to_str().unwrap(), &[], None, Some(3600), false)
             .unwrap();
     assert!(data.get("paths").unwrap().get("/pets").is_some());
 }
@@ -174,7 +174,7 @@ fn mcp_stdio_list_and_echo() {
     let server = fixtures_dir().join("mcp_test_server.py");
     let stdio_cmd = format!("{} {}", python(), server.display());
 
-    mcp2cli()
+    skiff()
         .args(["--mcp-stdio", &stdio_cmd, "--list"])
         .timeout(Duration::from_secs(30))
         .assert()
@@ -182,7 +182,7 @@ fn mcp_stdio_list_and_echo() {
         .stdout(predicate::str::contains("echo"))
         .stdout(predicate::str::contains("add-numbers"));
 
-    mcp2cli()
+    skiff()
         .args([
             "--mcp-stdio",
             &stdio_cmd,
@@ -195,7 +195,7 @@ fn mcp_stdio_list_and_echo() {
         .success()
         .stdout(predicate::str::contains("hello world"));
 
-    mcp2cli()
+    skiff()
         .args([
             "--mcp-stdio",
             &stdio_cmd,
@@ -217,7 +217,7 @@ fn mcp_stdio_search_and_env_not_shadowed() {
     let server = fixtures_dir().join("mcp_test_server.py");
     let stdio_cmd = format!("{} {}", python(), server.display());
 
-    mcp2cli()
+    skiff()
         .args(["--mcp-stdio", &stdio_cmd, "--search", "echo"])
         .timeout(Duration::from_secs(30))
         .assert()
@@ -225,7 +225,7 @@ fn mcp_stdio_search_and_env_not_shadowed() {
         .stdout(predicate::str::contains("echo"))
         .stdout(predicate::str::contains("add-numbers").not());
 
-    let out = mcp2cli()
+    let out = skiff()
         .args(["--mcp-stdio", &stdio_cmd, "deploy", "--env", "production"])
         .timeout(Duration::from_secs(30))
         .assert()
