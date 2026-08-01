@@ -78,7 +78,9 @@ def resolve_python_bin() -> list[str]:
     if env:
         return env.split()
     if shutil.which("uvx"):
-        return ["uvx", "mcp2cli"]
+        # Plain `uvx mcp2cli` can pull an mcp SDK that renamed streamablehttp_client.
+        # Pin a known-good transport for fair HTTP streamable benches.
+        return ["uvx", "--with", "mcp==1.12.0", "mcp2cli"]
     sys.exit("Set MCP2CLI_PYTHON_BIN or install uv (`uvx mcp2cli`)")
 
 
