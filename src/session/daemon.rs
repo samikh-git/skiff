@@ -25,12 +25,20 @@ use crate::session::paths::{
 use crate::session::peer::peer_uid_matches_self;
 use crate::session::protocol::{SessionMethod, SessionRequest, SessionResponse};
 use crate::session::spawn::DaemonConfig;
+use crate::tools_index::{build_compact_index, search_compact, CompactIndex};
 
 struct DaemonState {
     name: String,
     client: Option<McpClient>,
     tools_cache: Option<Vec<Value>>,
+    /// In-memory names/postings index; rebuilt with `tools_cache`, dies with daemon.
+    tools_index: Option<CompactIndex>,
     last_activity: Instant,
+}
+
+fn cache_tools(st: &mut DaemonState, tools: Vec<Value>) {
+    st.tools_index = Some(build_compact_index(&tools, false));
+    st.tools_cache = Some(tools);
 }
 
 /// Entry point for `__session_daemon <config-path>`.
@@ -85,6 +93,7 @@ async fn daemon_main(config: DaemonConfig) -> Result<()> {
         name: name.clone(),
         client: Some(client),
         tools_cache: None,
+        tools_index: None,
         last_activity: Instant::now(),
     }));
 
@@ -241,8 +250,34 @@ async fn dispatch(state: &Arc<Mutex<DaemonState>>, req: &SessionRequest) -> Resu
                 }
             }
             let tools = list_tools_on(client).await?;
-            st.tools_cache = Some(tools.clone());
+            cache_tools(&mut st, tools.clone());
             Ok(Value::Array(tools))
+        }
+        SessionMethod::ListToolsLight => {
+            let refresh = req
+                .params
+                .get("refresh")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let search = req
+                .params
+                .get("search")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty());
+            if refresh || st.tools_cache.is_none() || st.tools_index.is_none() {
+                let tools = list_tools_on(client).await?;
+                cache_tools(&mut st, tools);
+            }
+            let index = st
+                .tools_index
+                .as_ref()
+                .ok_or_else(|| Error::runtime("session tools index missing"))?;
+            let entries = if let Some(pat) = search {
+                search_compact(index, pat)
+            } else {
+                index.to_entries()
+            };
+            Ok(index.to_light_tools_json(&entries))
         }
         SessionMethod::GetTool => {
             let name = req
@@ -257,12 +292,14 @@ async fn dispatch(state: &Arc<Mutex<DaemonState>>, req: &SessionRequest) -> Resu
                 .unwrap_or(false);
             if refresh || st.tools_cache.is_none() {
                 let tools = list_tools_on(client).await?;
-                st.tools_cache = Some(tools);
+                cache_tools(&mut st, tools);
             }
             let tools = st.tools_cache.as_ref().unwrap();
-            let found = tools
-                .iter()
-                .find(|t| t.get("name").and_then(|n| n.as_str()) == Some(name));
+            // Match raw MCP name or kebab CLI subcommand (e.g. add_numbers / add-numbers).
+            let found = tools.iter().find(|t| {
+                let mcp = t.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                mcp == name || crate::coerce::to_kebab(mcp) == name
+            });
             Ok(found.cloned().unwrap_or(Value::Null))
         }
         SessionMethod::CallTool => {

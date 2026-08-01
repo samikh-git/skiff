@@ -9,10 +9,11 @@ use rmcp::{
 };
 use serde_json::{Map, Value};
 
-use crate::cache::{load_cached, save_cache};
+use crate::cache::load_cached;
 use crate::error::{Error, Result};
 use crate::mcp::common::{auth_headers_to_http, call_tool_on, list_tools_on, McpClient};
 use crate::oauth::OAuthReady;
+use crate::tools_index::save_tools_and_index;
 
 pub async fn fetch_mcp_tools_http(
     url: &str,
@@ -26,13 +27,14 @@ pub async fn fetch_mcp_tools_http(
     if !refresh {
         if let Some(cached) = load_cached(&tools_key, ttl)? {
             if let Some(arr) = cached.as_array() {
+                let _ = crate::tools_index::save_index(&tools_key, arr);
                 return Ok(arr.clone());
             }
         }
     }
 
     let tools = list_tools_http(url, auth_headers, oauth).await?;
-    save_cache(&tools_key, &Value::Array(tools.clone()))?;
+    save_tools_and_index(&tools_key, &tools)?;
     Ok(tools)
 }
 

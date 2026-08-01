@@ -113,6 +113,22 @@ fn session_lifecycle() {
             .success()
             .stdout(predicate::str::contains("via session"));
 
+        // Kebab CLI name must resolve via get_tool (MCP name is add_numbers).
+        env.cmd()
+            .args([
+                "--session",
+                name,
+                "--json",
+                "add-numbers",
+                "--a",
+                "2",
+                "--b",
+                "3",
+            ])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("5"));
+
         env.cmd()
             .args(["--session", name, "--list"])
             .assert()

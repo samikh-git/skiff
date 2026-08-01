@@ -14,10 +14,10 @@
 | Flag | Notes |
 |------|-------|
 | `--list` / `--search P` | Discover (search implies list) |
-| `--detail names\|brief\|full` | JSON list depth; `compact` ⇒ names |
+| `--detail names\|brief\|full` | JSON list depth; `compact` ⇒ names; default `full` for `--json`, `brief` for `--agent` |
 | `--describe TOOL` | One-tool full schema |
 | `TOOL --help --json` | Same as describe for that tool |
-| `--agent` / `MCP2CLI_AGENT=1` | JSON + brief + default `--max-bytes` 64KiB |
+| `--agent` / `MCP2CLI_AGENT=1` | JSON; search ⇒ names + `--top 20`; else brief; spool |
 | `--json` | Structured JSON; MCP **content-only** |
 | `--envelope` / `--full` | Full MCP CallToolResult |
 | `--toon` | Native TOON (JSON fallback on encode fail) |
@@ -58,6 +58,7 @@
 | `MCP2CLI_CONFIG_DIR` | `~/.config/mcp2cli` |
 | Sessions | `$MCP2CLI_CACHE_DIR/sessions/{name}.{sock,json,log}` |
 | Spool | `$MCP2CLI_CACHE_DIR/spool/` |
+| Tool index | `$MCP2CLI_CACHE_DIR/<key>_tools_index.json` (names/descriptions) |
 | OAuth | `$MCP2CLI_CACHE_DIR/oauth/<hash>/` |
 | Baked | `$MCP2CLI_CONFIG_DIR/baked.json` |
 

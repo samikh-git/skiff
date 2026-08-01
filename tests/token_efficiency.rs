@@ -164,6 +164,70 @@ fn json_content_only_vs_envelope() {
 }
 
 #[test]
+fn json_list_default_is_full_without_agent() {
+    let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let cmd = stdio_cmd();
+    let (mut c, _) = mcp2cli_with_cache();
+    let out = c
+        .args(["--mcp-stdio", &cmd, "--list", "--json"])
+        .timeout(Duration::from_secs(30))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let v: Value = serde_json::from_slice(&out).unwrap();
+    assert!(
+        v.as_array().unwrap()[0].get("parameters").is_some(),
+        "plain --json list should be full detail"
+    );
+}
+
+#[test]
+fn fail_tool_exits_nonzero() {
+    let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let cmd = stdio_cmd();
+    let (mut c, _) = mcp2cli_with_cache();
+    c.args([
+        "--mcp-stdio",
+        &cmd,
+        "--json",
+        "fail-tool",
+        "--message",
+        "kaboom",
+    ])
+    .timeout(Duration::from_secs(30))
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("kaboom"));
+}
+
+#[test]
+fn structured_only_returns_payload() {
+    let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let cmd = stdio_cmd();
+    let (mut c, _) = mcp2cli_with_cache();
+    let out = c
+        .args([
+            "--mcp-stdio",
+            &cmd,
+            "--json",
+            "structured-only",
+            "--n",
+            "42",
+        ])
+        .timeout(Duration::from_secs(30))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let v: Value = serde_json::from_slice(&out).unwrap();
+    assert_eq!(v["ok"], true);
+    assert_eq!(v["n"], 42);
+}
+
+#[test]
 fn native_toon_uniform_list() {
     let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let cmd = stdio_cmd();

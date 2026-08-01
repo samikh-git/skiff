@@ -150,7 +150,8 @@ impl ListOptions {
         Self {
             verbose: pre.verbose,
             compact: pre.compact,
-            json_output: pre.json_output || pre.agent,
+            // Agent defaults already applied to `json_output` when appropriate.
+            json_output: pre.json_output,
             pretty: pre.pretty,
             toon: pre.toon,
             detail: pre.list_detail(),
@@ -162,14 +163,7 @@ impl ListOptions {
 }
 
 fn truncate_desc(description: &str, max_len: usize) -> String {
-    if description.len() <= max_len {
-        return description.to_string();
-    }
-    let truncated = &description[..max_len];
-    match truncated.rsplit_once(' ') {
-        Some((head, _)) => format!("{head}..."),
-        None => format!("{truncated}..."),
-    }
+    crate::model::truncate_at_word(description, max_len)
 }
 
 /// Emit one-tool schema (JSON/TOON) or human help.

@@ -1,3 +1,14 @@
+---
+name: mcp2cli
+description: >-
+  Turn any MCP server, OpenAPI spec, or GraphQL endpoint into a CLI via the
+  Rust mcp2cli binary. Use when calling MCP tools, listing OpenAPI/GraphQL
+  operations, bake/@name configs, session daemons, or token-efficient agent
+  discovery (--agent, --detail, --describe, spool). Triggers: mcp2cli, --mcp,
+  --mcp-stdio, --spec, --graphql, bake, @name, session-start, --agent,
+  "list tools from this server".
+---
+
 # mcp2cli (Rust)
 
 Prefer this CLI over one-off HTTP clients when discovering or calling remote tools. No codegen.
@@ -26,16 +37,29 @@ $MCP2CLI --spec ./openapi.json --base-url https://api.example.com list-pets --li
 $MCP2CLI --graphql https://api.example.com/graphql --fields "id name" user --id 1
 ```
 
-`--agent` / `MCP2CLI_AGENT=1`: JSON + brief list detail + spill oversize to `$MCP2CLI_CACHE_DIR/spool/` (default 64KiB).
+`--agent` / `MCP2CLI_AGENT=1`: JSON; `--search` ⇒ `--detail names` + `--top 20`; otherwise brief list; spill oversize to spool (64KiB).
 
 | Flag | Role |
 |------|------|
-| `--detail names\|brief\|full` | List depth (`brief` default with `--json`) |
+| `--detail names\|brief\|full` | List depth (`names`+`--top 20` on agent search; `brief` when browsing) |
 | `--describe TOOL` | One-tool full schema JSON |
 | `--envelope` | Full MCP `CallToolResult` (default `--json` is content-only) |
 | `--toon` | Native TOON encode (falls back to JSON on failure) |
 | `--max-bytes N` / `--inline` | Spill threshold / never spill |
 | `--spool-clean` | Remove expired spool files |
+
+Name lists may use **prefix compression**:
+`{"groups":{"workers-scripts":["list","get"]},"names":["echo"]}` → tool ids `workers-scripts-list`, etc.
+
+### How search stays fast (local index)
+
+MCP `list_tools` returns **every** tool with full `inputSchema` (multi‑MB on fat APIs). mcp2cli:
+
+1. Caches the full list under `$MCP2CLI_CACHE_DIR`
+2. Also writes a light **`_index.json`** (name + description only)
+3. Warm `--search` / `--detail names|brief` reads the **index**, not full schemas
+
+That cuts CPU and disk I/O; **agent tokens** still depend on stdout (`--top`, compression). True **server-side** search (filter before download) needs MCP protocol/server support we do not assume — the index is the portable stand-in.
 
 ## Sessions (Unix)
 

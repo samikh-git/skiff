@@ -129,7 +129,7 @@ pub fn param_to_json(p: &ParamDef) -> Value {
 pub enum ListDetail {
     /// Tool names only.
     Names,
-    /// Name + short description (default for `--json` lists).
+    /// Name + short description (default for `--agent` lists).
     #[default]
     Brief,
     /// Full parameter schemas ([`command_to_json`]).
@@ -147,17 +147,21 @@ impl ListDetail {
     }
 }
 
+/// Truncate `s` to at most `max_chars` Unicode scalars, preferring a word boundary.
+pub fn truncate_at_word(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        return s.to_string();
+    }
+    let truncated: String = s.chars().take(max_chars).collect();
+    match truncated.rsplit_once(' ') {
+        Some((head, _)) if !head.is_empty() => format!("{head}..."),
+        _ => format!("{truncated}..."),
+    }
+}
+
 /// Name + truncated description for progressive discovery.
 pub fn command_to_brief_json(cmd: &CommandDef) -> Value {
-    let desc = if cmd.description.len() > 120 {
-        let truncated = &cmd.description[..120];
-        match truncated.rsplit_once(' ') {
-            Some((head, _)) => format!("{head}..."),
-            None => format!("{truncated}..."),
-        }
-    } else {
-        cmd.description.clone()
-    };
+    let desc = truncate_at_word(&cmd.description, 120);
     let mut d = serde_json::json!({
         "name": cmd.name,
         "description": desc,
@@ -196,13 +200,128 @@ pub fn command_to_json(cmd: &CommandDef) -> Value {
 /// Serialize commands at the requested detail level.
 pub fn commands_to_json(commands: &[CommandDef], detail: ListDetail) -> Value {
     match detail {
-        ListDetail::Names => Value::Array(
-            commands
-                .iter()
-                .map(|c| Value::String(c.name.clone()))
-                .collect(),
-        ),
+        ListDetail::Names => names_list_json(commands),
         ListDetail::Brief => Value::Array(commands.iter().map(command_to_brief_json).collect()),
         ListDetail::Full => Value::Array(commands.iter().map(command_to_json).collect()),
+    }
+}
+
+/// Flat name array, or prefix-compressed object when that saves space.
+///
+/// Compressed shape (agent-reconstructable):
+/// `{"groups":{"workers-scripts":["list","get"]},"names":["echo"]}`
+/// → tool id = `"{prefix}-{suffix}"` for groups, or bare `names` entries.
+pub fn names_list_json(commands: &[CommandDef]) -> Value {
+    let names: Vec<String> = commands.iter().map(|c| c.name.clone()).collect();
+    compress_names(&names)
+        .unwrap_or_else(|| Value::Array(names.into_iter().map(Value::String).collect()))
+}
+
+fn compress_names(names: &[String]) -> Option<Value> {
+    if names.len() < 8 {
+        return None;
+    }
+    let mut groups: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    let mut ungrouped: Vec<String> = Vec::new();
+
+    for name in names {
+        match name.rfind('-') {
+            Some(i) if i > 0 && i + 1 < name.len() => {
+                let prefix = name[..i].to_string();
+                let suffix = name[i + 1..].to_string();
+                groups.entry(prefix).or_default().push(suffix);
+            }
+            _ => ungrouped.push(name.clone()),
+        }
+    }
+
+    let mut kept = serde_json::Map::new();
+    for (prefix, suffixes) in groups {
+        if suffixes.len() >= 2 {
+            kept.insert(
+                prefix,
+                Value::Array(suffixes.into_iter().map(Value::String).collect()),
+            );
+        } else if let Some(suf) = suffixes.into_iter().next() {
+            ungrouped.push(format!("{prefix}-{suf}"));
+        }
+    }
+
+    if kept.is_empty() {
+        return None;
+    }
+
+    let compressed = {
+        let mut m = serde_json::Map::new();
+        m.insert("groups".into(), Value::Object(kept));
+        if !ungrouped.is_empty() {
+            m.insert(
+                "names".into(),
+                Value::Array(ungrouped.iter().cloned().map(Value::String).collect()),
+            );
+        }
+        Value::Object(m)
+    };
+    let flat = Value::Array(names.iter().cloned().map(Value::String).collect());
+    let c_len = serde_json::to_vec(&compressed)
+        .map(|v| v.len())
+        .unwrap_or(usize::MAX);
+    let f_len = serde_json::to_vec(&flat).map(|v| v.len()).unwrap_or(0);
+    if c_len < f_len {
+        Some(compressed)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_at_word_utf8_safe() {
+        // Multi-byte chars must not panic on a mid-codepoint cut.
+        let s = "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé";
+        let out = truncate_at_word(s, 10);
+        assert!(out.ends_with("..."));
+        assert!(out.chars().count() <= 13); // 10 + "..."
+    }
+
+    #[test]
+    fn truncate_prefers_word_boundary() {
+        let s = "hello world this is a long description here";
+        let out = truncate_at_word(s, 20);
+        assert_eq!(out, "hello world this is...");
+    }
+
+    #[test]
+    fn brief_json_truncates_long_desc() {
+        let cmd = CommandDef {
+            name: "t".into(),
+            description: "a".repeat(200),
+            ..Default::default()
+        };
+        let v = command_to_brief_json(&cmd);
+        let d = v["description"].as_str().unwrap();
+        assert!(d.len() < 200);
+        assert!(d.ends_with("..."));
+    }
+
+    #[test]
+    fn compresses_shared_prefixes() {
+        let names: Vec<String> = (0..10)
+            .map(|i| format!("workers-scripts-op{i}"))
+            .chain(std::iter::once("echo".into()))
+            .collect();
+        let v = compress_names(&names).expect("should compress");
+        assert!(v.get("groups").is_some());
+        let flat_len = serde_json::to_vec(&Value::Array(
+            names.iter().cloned().map(Value::String).collect(),
+        ))
+        .unwrap()
+        .len();
+        let c_len = serde_json::to_vec(&v).unwrap().len();
+        assert!(c_len < flat_len);
     }
 }

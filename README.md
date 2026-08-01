@@ -114,6 +114,14 @@ Cloudflare MCP byte bench (optional):
 CF_API_TOKEN=… MCP2CLI_BENCH_CF=1 cargo test --test cloudflare_bench -- --ignored --nocapture
 ```
 
+Rust vs Python multi-run comparison (dataframe + optional CSV; needs `pandas` and `uvx mcp2cli`):
+
+```bash
+cargo build --release
+python3 scripts/bench_vs_python.py --runs 10
+# MCP2CLI_RUST_BIN=… MCP2CLI_PYTHON_BIN="uvx mcp2cli" python3 scripts/bench_vs_python.py --csv /tmp/bench.csv
+```
+
 ## Status / limits
 
 Shipped: OpenAPI, MCP stdio/HTTP (streamable + SSE), OAuth, GraphQL, sessions (Unix), bake/`@name`, list/search/output flags, native `--toon`, `--envelope`, spool overflow, `--agent` defaults.

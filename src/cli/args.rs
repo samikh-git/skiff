@@ -9,6 +9,9 @@ use crate::model::ListDetail;
 use crate::paths::DEFAULT_CACHE_TTL;
 use crate::spool::DEFAULT_AGENT_MAX_BYTES;
 
+/// Default `--top` when `--agent` + `--search` and user did not set `--top`.
+pub const DEFAULT_AGENT_SEARCH_TOP: usize = 20;
+
 #[derive(Debug, Clone, Parser)]
 #[command(
     name = "mcp2cli",
@@ -233,7 +236,15 @@ impl GlobalArgs {
             self.json_output = true;
         }
         if self.detail.is_none() && !self.compact {
-            self.detail = Some("brief".into());
+            // Search: names only (then --top). Browse: brief.
+            if self.search_pattern.is_some() {
+                self.detail = Some("names".into());
+            } else {
+                self.detail = Some("brief".into());
+            }
+        }
+        if self.search_pattern.is_some() && self.top.is_none() {
+            self.top = Some(DEFAULT_AGENT_SEARCH_TOP);
         }
         if self.max_bytes.is_none() {
             self.max_bytes = Some(DEFAULT_AGENT_MAX_BYTES);
@@ -244,10 +255,17 @@ impl GlobalArgs {
         if self.compact {
             return ListDetail::Names;
         }
-        self.detail
-            .as_deref()
-            .and_then(ListDetail::parse)
-            .unwrap_or(ListDetail::Brief)
+        if let Some(d) = self.detail.as_deref().and_then(ListDetail::parse) {
+            return d;
+        }
+        // Agent default: brief. Plain `--json`/`--toon`: full (pre-agent parity).
+        if self.agent {
+            ListDetail::Brief
+        } else if self.json_output || self.toon {
+            ListDetail::Full
+        } else {
+            ListDetail::Brief
+        }
     }
 
     /// Suppress human list banners.
@@ -256,12 +274,14 @@ impl GlobalArgs {
     }
 
     pub fn output_options(&self) -> crate::output::OutputOptions {
+        // `apply_agent_defaults` already sets `json_output` when agent && !raw && !toon.
+        // Do not force JSON over `--raw`.
         crate::output::OutputOptions {
             pretty: self.pretty,
             raw: self.raw,
             toon: self.toon,
             head: self.head,
-            json_output: self.json_output || self.agent,
+            json_output: self.json_output,
             max_bytes: self.max_bytes,
             inline: self.inline,
         }

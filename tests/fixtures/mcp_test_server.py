@@ -7,6 +7,7 @@ from mcp.server import Server
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.stdio import stdio_server
 from mcp.types import (
+    CallToolResult,
     GetPromptResult,
     ImageContent,
     Prompt,
@@ -111,6 +112,28 @@ async def list_tools():
                     "count": {"type": "integer", "description": "Number of items"},
                 },
                 "required": ["count"],
+            },
+        ),
+        Tool(
+            name="fail_tool",
+            description="Return an isError tool result",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Error message"},
+                },
+                "required": ["message"],
+            },
+        ),
+        Tool(
+            name="structured_only",
+            description="Return structuredContent with empty content blocks",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "n": {"type": "integer", "description": "A number"},
+                },
+                "required": ["n"],
             },
         ),
     ]
@@ -235,6 +258,18 @@ async def call_tool(name: str, arguments: dict):
         count = int(arguments.get("count", 3))
         items = [{"id": i, "name": f"item-{i}", "ok": i % 2 == 0} for i in range(count)]
         return [TextContent(type="text", text=_json.dumps(items))]
+    if name == "fail_tool":
+        msg = arguments.get("message", "failed")
+        return CallToolResult(
+            content=[TextContent(type="text", text=msg)],
+            isError=True,
+        )
+    if name == "structured_only":
+        n = int(arguments.get("n", 0))
+        return CallToolResult(
+            content=[],
+            structuredContent={"ok": True, "n": n},
+        )
     return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 

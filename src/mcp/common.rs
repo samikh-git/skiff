@@ -46,12 +46,7 @@ fn spool_base64_blob(data_b64: &str, mime: &str, kind: &str) -> Result<Value> {
     }))
 }
 
-/// Format a tool result for agents: content-only by default; spool non-text blobs.
-pub fn format_tool_result(result: &CallToolResult, full_envelope: bool) -> Result<Value> {
-    if full_envelope {
-        return serde_json::to_value(result).map_err(|e| Error::runtime(e.to_string()));
-    }
-
+fn content_only_payload(result: &CallToolResult) -> Result<Value> {
     let mut texts = Vec::new();
     let mut extras = Vec::new();
 
@@ -76,6 +71,10 @@ pub fn format_tool_result(result: &CallToolResult, full_envelope: bool) -> Resul
     }
 
     if texts.is_empty() && extras.is_empty() {
+        // Prefer structuredContent when the tool returned no content blocks.
+        if let Some(sc) = &result.structured_content {
+            return Ok(sc.clone());
+        }
         return Ok(Value::Null);
     }
 
@@ -102,6 +101,35 @@ pub fn format_tool_result(result: &CallToolResult, full_envelope: bool) -> Resul
         "text": text_val,
         "attachments": extras,
     }))
+}
+
+fn tool_error_message(payload: &Value) -> String {
+    match payload {
+        Value::Null => "MCP tool returned an error".into(),
+        Value::String(s) => format!("MCP tool error: {s}"),
+        other => format!(
+            "MCP tool error: {}",
+            serde_json::to_string(other).unwrap_or_else(|_| other.to_string())
+        ),
+    }
+}
+
+/// Format a tool result for agents: content-only by default; spool non-text blobs.
+///
+/// When `is_error` is set, returns [`Error::Runtime`] so the CLI exits non-zero.
+/// Structured-only results (`structured_content` with empty `content`) are returned
+/// as that JSON value in content-only mode.
+pub fn format_tool_result(result: &CallToolResult, full_envelope: bool) -> Result<Value> {
+    let value = if full_envelope {
+        serde_json::to_value(result).map_err(|e| Error::runtime(e.to_string()))?
+    } else {
+        content_only_payload(result)?
+    };
+
+    if result.is_error == Some(true) {
+        return Err(Error::runtime(tool_error_message(&value)));
+    }
+    Ok(value)
 }
 
 pub fn tools_to_commands(tools: &[Value]) -> Vec<CommandDef> {
@@ -144,4 +172,56 @@ pub async fn call_tool_on(
         .await
         .map_err(|e| Error::runtime(format!("call_tool failed: {e}")))?;
     format_tool_result(&result, full_envelope)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmcp::model::CallToolResult;
+    use serde_json::json;
+
+    fn parse_result(v: Value) -> CallToolResult {
+        serde_json::from_value(v).expect("CallToolResult")
+    }
+
+    #[test]
+    fn structured_only_content() {
+        let r = parse_result(json!({
+            "content": [],
+            "structuredContent": {"ok": true, "n": 7}
+        }));
+        assert_eq!(
+            format_tool_result(&r, false).unwrap(),
+            json!({"ok": true, "n": 7})
+        );
+    }
+
+    #[test]
+    fn is_error_returns_runtime_err() {
+        let r = parse_result(json!({
+            "content": [{"type": "text", "text": "boom"}],
+            "isError": true
+        }));
+        let err = format_tool_result(&r, false).unwrap_err();
+        assert!(err.to_string().contains("boom"));
+    }
+
+    #[test]
+    fn text_content_preferred_over_structured() {
+        let r = parse_result(json!({
+            "content": [{"type": "text", "text": "hello"}],
+            "structuredContent": {"ignored": true}
+        }));
+        assert_eq!(format_tool_result(&r, false).unwrap(), json!("hello"));
+    }
+
+    #[test]
+    fn envelope_includes_is_error_flag_on_success_path() {
+        let r = parse_result(json!({
+            "content": [{"type": "text", "text": "ok"}],
+            "isError": false
+        }));
+        let v = format_tool_result(&r, true).unwrap();
+        assert!(v.get("content").is_some());
+    }
 }
