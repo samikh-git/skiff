@@ -5,7 +5,9 @@
 
 use clap::Parser;
 
+use crate::model::ListDetail;
 use crate::paths::DEFAULT_CACHE_TTL;
+use crate::spool::DEFAULT_AGENT_MAX_BYTES;
 
 #[derive(Debug, Clone, Parser)]
 #[command(
@@ -60,6 +62,14 @@ pub struct GlobalArgs {
     #[arg(long = "search", value_name = "PATTERN")]
     pub search_pattern: Option<String>,
 
+    /// List / help JSON detail: names|brief|full
+    #[arg(long, value_name = "LEVEL", value_parser = ["names", "brief", "full"])]
+    pub detail: Option<String>,
+
+    /// Emit one tool's full schema as JSON (progressive describe)
+    #[arg(long = "describe", value_name = "TOOL")]
+    pub describe: Option<String>,
+
     /// Full tool descriptions in --list
     #[arg(long)]
     pub verbose: bool,
@@ -72,7 +82,7 @@ pub struct GlobalArgs {
     #[arg(long, value_name = "N")]
     pub top: Option<usize>,
 
-    /// Space-separated tool names only
+    /// Space-separated tool names only (alias for --detail names)
     #[arg(long)]
     pub compact: bool,
 
@@ -84,17 +94,37 @@ pub struct GlobalArgs {
     #[arg(long)]
     pub raw: bool,
 
-    /// Force valid JSON output
+    /// Force valid JSON output (content-only for MCP; see --envelope)
     #[arg(long = "json")]
     pub json_output: bool,
 
-    /// TOON encoding (falls back with warning in M1)
+    /// Return full MCP CallToolResult envelope (instead of content-only)
+    #[arg(long = "envelope", visible_alias = "full")]
+    pub envelope: bool,
+
+    /// TOON encoding (native; falls back to JSON on encode failure)
     #[arg(long)]
     pub toon: bool,
 
     /// Limit output to first N array records
     #[arg(long, value_name = "N")]
     pub head: Option<usize>,
+
+    /// Spill stdout to spool when rendered size exceeds N bytes (0 = never)
+    #[arg(long = "max-bytes", value_name = "N")]
+    pub max_bytes: Option<usize>,
+
+    /// Never spill; always print full stdout
+    #[arg(long)]
+    pub inline: bool,
+
+    /// Agent defaults: JSON, brief discovery, spool oversize (or MCP2CLI_AGENT=1)
+    #[arg(long)]
+    pub agent: bool,
+
+    /// Delete expired spool files and exit
+    #[arg(long = "spool-clean")]
+    pub spool_clean: bool,
 
     /// GraphQL selection set override
     #[arg(long)]
@@ -190,14 +220,56 @@ pub struct GlobalArgs {
 }
 
 impl GlobalArgs {
+    /// Apply `--agent` / `MCP2CLI_AGENT=1` defaults (idempotent).
+    pub fn apply_agent_defaults(&mut self) {
+        let env_agent = std::env::var("MCP2CLI_AGENT")
+            .map(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
+            .unwrap_or(false);
+        if !self.agent && !env_agent {
+            return;
+        }
+        self.agent = true;
+        if !self.raw && !self.toon {
+            self.json_output = true;
+        }
+        if self.detail.is_none() && !self.compact {
+            self.detail = Some("brief".into());
+        }
+        if self.max_bytes.is_none() {
+            self.max_bytes = Some(DEFAULT_AGENT_MAX_BYTES);
+        }
+    }
+
+    pub fn list_detail(&self) -> ListDetail {
+        if self.compact {
+            return ListDetail::Names;
+        }
+        self.detail
+            .as_deref()
+            .and_then(ListDetail::parse)
+            .unwrap_or(ListDetail::Brief)
+    }
+
+    /// Suppress human list banners.
+    pub fn quiet_list(&self) -> bool {
+        self.agent || self.json_output || self.compact || self.toon
+    }
+
     pub fn output_options(&self) -> crate::output::OutputOptions {
         crate::output::OutputOptions {
             pretty: self.pretty,
             raw: self.raw,
             toon: self.toon,
             head: self.head,
-            json_output: self.json_output,
+            json_output: self.json_output || self.agent,
+            max_bytes: self.max_bytes,
+            inline: self.inline,
         }
+    }
+
+    /// MCP call: content-only unless `--envelope`.
+    pub fn full_envelope(&self) -> bool {
+        self.envelope
     }
 
     pub fn parse_auth_headers(&self) -> crate::error::Result<Vec<(String, String)>> {

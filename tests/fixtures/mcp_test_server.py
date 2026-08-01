@@ -8,6 +8,7 @@ from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     GetPromptResult,
+    ImageContent,
     Prompt,
     PromptArgument,
     PromptMessage,
@@ -68,6 +69,48 @@ async def list_tools():
                     "refresh": {"type": "boolean", "description": "Force refresh"},
                 },
                 "required": ["env"],
+            },
+        ),
+        Tool(
+            name="big_payload",
+            description="Return a large text payload for spool tests",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "size": {"type": "integer", "description": "Approximate byte size"},
+                    "needle": {"type": "string", "description": "Marker string to embed"},
+                },
+                "required": ["size"],
+            },
+        ),
+        Tool(
+            name="ansi_echo",
+            description="Echo with ANSI color codes",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Message"},
+                },
+                "required": ["message"],
+            },
+        ),
+        Tool(
+            name="tiny_image",
+            description="Return a tiny fake image content block",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="uniform_list",
+            description="Return a uniform array of objects (TOON-friendly)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "count": {"type": "integer", "description": "Number of items"},
+                },
+                "required": ["count"],
             },
         ),
     ]
@@ -175,6 +218,23 @@ async def call_tool(name: str, arguments: dict):
             "env": arguments.get("env", ""),
             "refresh": arguments.get("refresh", False),
         }))]
+    if name == "big_payload":
+        size = int(arguments.get("size", 1000))
+        needle = arguments.get("needle", "NEEDLE_MARKER")
+        body = ("x" * max(0, size - len(needle) - 16)) + needle + ("y" * 8)
+        return [TextContent(type="text", text=body)]
+    if name == "ansi_echo":
+        msg = arguments.get("message", "")
+        return [TextContent(type="text", text=f"\x1b[31m{msg}\x1b[0m")]
+    if name == "tiny_image":
+        # 1x1 PNG base64
+        return [ImageContent(type="image", data="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", mimeType="image/png")]
+    if name == "uniform_list":
+        import json as _json
+
+        count = int(arguments.get("count", 3))
+        items = [{"id": i, "name": f"item-{i}", "ok": i % 2 == 0} for i in range(count)]
+        return [TextContent(type="text", text=_json.dumps(items))]
     return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 

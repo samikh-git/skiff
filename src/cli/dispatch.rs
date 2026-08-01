@@ -12,9 +12,10 @@ use crate::bake::require_baked;
 use crate::cache::cache_key_for;
 use crate::cli::args::GlobalArgs;
 use crate::cli::bake::handle_bake;
-use crate::cli::dynamic::{parse_tool_args, print_command_help, read_stdin_json};
+use crate::cli::dynamic::{parse_tool_args, read_stdin_json};
 use crate::cli::list::{
-    apply_list_options, filter_by_search, list_commands, ListOptions, ListStyle,
+    apply_list_options, describe_tool, filter_by_search, list_commands, maybe_tool_help,
+    ListOptions, ListStyle,
 };
 use crate::cli::{global_option_sets, split_at_subcommand};
 use crate::error::{Error, Result};
@@ -76,8 +77,20 @@ fn dispatch_impl(argv: Vec<OsString>, bake_config: Option<BakeConfig>) -> Result
         }
     })?;
 
+    pre_args.apply_agent_defaults();
+
+    if pre_args.spool_clean {
+        let n = crate::spool::clean_spool(crate::spool::DEFAULT_SPOOL_TTL_SECS)?;
+        println!("Removed {n} expired spool file(s)");
+        return Ok(());
+    }
+
     if pre_args.search_pattern.is_some() {
         pre_args.list_commands = true;
+    }
+
+    if pre_args.describe.is_some() {
+        pre_args.list_commands = false;
     }
 
     // --oauth-clear can run with just a discovery URL source flag.
@@ -205,26 +218,25 @@ fn dispatch_openapi(
     let mut commands = extract_openapi_commands(&spec);
     commands = apply_bake_filter(commands, bake);
 
-    let list_opts = ListOptions {
-        verbose: pre.verbose,
-        compact: pre.compact,
-        json_output: pre.json_output,
-        pretty: pre.pretty,
-        style: ListStyle::OpenApi,
-    };
+    let list_opts = ListOptions::from_global(pre, ListStyle::OpenApi);
+
+    if let Some(name) = &pre.describe {
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        return describe_tool(&commands, name, pre);
+    }
 
     if pre.list_commands {
         if let Some(pat) = &pre.search_pattern {
             commands = filter_by_search(commands, pat);
             if commands.is_empty() {
-                if pre.json_output {
+                if pre.json_output || pre.agent {
                     list_commands(&commands, &list_opts)?;
                 } else {
                     println!("\nNo tools matching '{pat}'.");
                 }
                 return Ok(());
             }
-            if !pre.compact && !pre.json_output {
+            if !pre.quiet_list() {
                 println!("\nTools matching '{pat}':");
             }
         }
@@ -238,17 +250,15 @@ fn dispatch_openapi(
         return Err(Error::usage("__printed__"));
     }
 
+    if maybe_tool_help(&commands, remaining, pre)? {
+        return Ok(());
+    }
+
     let base_url = resolve_base_url(pre.base_url.as_deref(), &spec, spec_source)?;
     let parsed = match parse_tool_args(&commands, remaining) {
         Err(Error::Usage(msg)) if msg == "__help__" => return Ok(()),
         other => other?,
     };
-    if remaining.get(1).map(String::as_str) == Some("--help")
-        || remaining.get(1).map(String::as_str) == Some("-h")
-    {
-        print_command_help(&parsed.command);
-        return Ok(());
-    }
 
     execute_openapi(&parsed, &base_url, &auth, &pre.output_options())?;
     let _ = record_usage(&src_hash, &parsed.command.name);
@@ -284,26 +294,25 @@ fn dispatch_graphql(
     let mut commands = extract_graphql_commands(&schema);
     commands = apply_bake_filter(commands, bake);
 
-    let list_opts = ListOptions {
-        verbose: pre.verbose,
-        compact: pre.compact,
-        json_output: pre.json_output,
-        pretty: pre.pretty,
-        style: ListStyle::Graphql,
-    };
+    let list_opts = ListOptions::from_global(pre, ListStyle::Graphql);
+
+    if let Some(name) = &pre.describe {
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        return describe_tool(&commands, name, pre);
+    }
 
     if pre.list_commands {
         if let Some(pat) = &pre.search_pattern {
             commands = filter_by_search(commands, pat);
             if commands.is_empty() {
-                if pre.json_output {
+                if pre.json_output || pre.agent {
                     list_commands(&commands, &list_opts)?;
                 } else {
                     println!("\nNo tools matching '{pat}'.");
                 }
                 return Ok(());
             }
-            if !pre.compact && !pre.json_output {
+            if !pre.quiet_list() {
                 println!("\nTools matching '{pat}':");
             }
         }
@@ -312,14 +321,18 @@ fn dispatch_graphql(
     }
 
     if remaining.is_empty() {
-        if !pre.compact && !pre.json_output {
+        if !pre.quiet_list() {
             println!("Available operations:");
         }
         let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
         list_commands(&commands, &list_opts)?;
-        if !pre.compact && !pre.json_output {
+        if !pre.quiet_list() {
             println!("\nUse --list for the same output, or provide a subcommand.");
         }
+        return Ok(());
+    }
+
+    if maybe_tool_help(&commands, remaining, pre)? {
         return Ok(());
     }
 
@@ -327,12 +340,6 @@ fn dispatch_graphql(
         Err(Error::Usage(msg)) if msg == "__help__" => return Ok(()),
         other => other?,
     };
-    if remaining.get(1).map(String::as_str) == Some("--help")
-        || remaining.get(1).map(String::as_str) == Some("-h")
-    {
-        print_command_help(&parsed.command);
-        return Ok(());
-    }
 
     execute_graphql(
         &parsed,
@@ -377,44 +384,7 @@ fn dispatch_mcp_http(
     let oauth: Option<OAuthReady> = rt.block_on(setup_from_args(pre))?;
     let oauth_ref = oauth.as_ref();
 
-    let list_opts = ListOptions {
-        verbose: pre.verbose,
-        compact: pre.compact,
-        json_output: pre.json_output,
-        pretty: pre.pretty,
-        style: ListStyle::Mcp,
-    };
-
-    if pre.list_commands {
-        let tools = rt.block_on(fetch_mcp_tools_http(
-            url,
-            &auth,
-            &cache_key,
-            pre.cache_ttl,
-            pre.refresh,
-            transport,
-            oauth_ref,
-        ))?;
-        let mut commands = apply_bake_filter(tools_to_commands(&tools), bake);
-        if let Some(pat) = &pre.search_pattern {
-            commands = filter_by_search(commands, pat);
-            if commands.is_empty() {
-                if pre.json_output {
-                    list_commands(&commands, &list_opts)?;
-                } else {
-                    println!("\nNo tools matching '{pat}'.");
-                }
-                return Ok(());
-            }
-            if !pre.compact && !pre.json_output {
-                println!("\nTools matching '{pat}':");
-            }
-        } else if !pre.compact && !pre.json_output {
-            println!("\nAvailable tools:");
-        }
-        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
-        return list_commands(&commands, &list_opts);
-    }
+    let list_opts = ListOptions::from_global(pre, ListStyle::Mcp);
 
     let tools = rt.block_on(fetch_mcp_tools_http(
         url,
@@ -425,27 +395,48 @@ fn dispatch_mcp_http(
         transport,
         oauth_ref,
     ))?;
-    let commands = apply_bake_filter(tools_to_commands(&tools), bake);
+    let mut commands = apply_bake_filter(tools_to_commands(&tools), bake);
+
+    if let Some(name) = &pre.describe {
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        return describe_tool(&commands, name, pre);
+    }
+
+    if pre.list_commands {
+        if let Some(pat) = &pre.search_pattern {
+            commands = filter_by_search(commands, pat);
+            if commands.is_empty() {
+                if pre.json_output || pre.agent {
+                    list_commands(&commands, &list_opts)?;
+                } else {
+                    println!("\nNo tools matching '{pat}'.");
+                }
+                return Ok(());
+            }
+            if !pre.quiet_list() {
+                println!("\nTools matching '{pat}':");
+            }
+        } else if !pre.quiet_list() {
+            println!("\nAvailable tools:");
+        }
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        return list_commands(&commands, &list_opts);
+    }
 
     if remaining.is_empty() {
-        if !pre.compact && !pre.json_output {
+        if !pre.quiet_list() {
             println!("Available tools:");
         }
         let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
         list_commands(&commands, &list_opts)?;
-        if !pre.compact && !pre.json_output {
+        if !pre.quiet_list() {
             println!("\nUse --list for the same output, or provide a subcommand.");
         }
         return Ok(());
     }
 
-    if remaining.get(1).map(String::as_str) == Some("--help")
-        || remaining.get(1).map(String::as_str) == Some("-h")
-    {
-        if let Some(cmd) = commands.iter().find(|c| c.name == remaining[0]) {
-            print_command_help(cmd);
-            return Ok(());
-        }
+    if maybe_tool_help(&commands, remaining, pre)? {
+        return Ok(());
     }
 
     let parsed = match parse_tool_args(&commands, remaining) {
@@ -478,7 +469,7 @@ fn dispatch_mcp_http(
         &auth,
         &tool_name,
         arguments,
-        pre.json_output,
+        pre.full_envelope(),
         transport,
         oauth_ref,
     ))?;
@@ -508,42 +499,7 @@ fn dispatch_mcp_stdio(
         .build()
         .map_err(|e| Error::runtime(e.to_string()))?;
 
-    let list_opts = ListOptions {
-        verbose: pre.verbose,
-        compact: pre.compact,
-        json_output: pre.json_output,
-        pretty: pre.pretty,
-        style: ListStyle::Mcp,
-    };
-
-    if pre.list_commands {
-        let tools = rt.block_on(fetch_mcp_tools_stdio(
-            command_str,
-            &env_vars,
-            &cache_key,
-            pre.cache_ttl,
-            pre.refresh,
-        ))?;
-        let mut commands = apply_bake_filter(tools_to_commands(&tools), bake);
-        if let Some(pat) = &pre.search_pattern {
-            commands = filter_by_search(commands, pat);
-            if commands.is_empty() {
-                if pre.json_output {
-                    list_commands(&commands, &list_opts)?;
-                } else {
-                    println!("\nNo tools matching '{pat}'.");
-                }
-                return Ok(());
-            }
-            if !pre.compact && !pre.json_output {
-                println!("\nTools matching '{pat}':");
-            }
-        } else if !pre.compact && !pre.json_output {
-            println!("\nAvailable tools:");
-        }
-        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
-        return list_commands(&commands, &list_opts);
-    }
+    let list_opts = ListOptions::from_global(pre, ListStyle::Mcp);
 
     let tools = rt.block_on(fetch_mcp_tools_stdio(
         command_str,
@@ -552,27 +508,48 @@ fn dispatch_mcp_stdio(
         pre.cache_ttl,
         pre.refresh,
     ))?;
-    let commands = apply_bake_filter(tools_to_commands(&tools), bake);
+    let mut commands = apply_bake_filter(tools_to_commands(&tools), bake);
+
+    if let Some(name) = &pre.describe {
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        return describe_tool(&commands, name, pre);
+    }
+
+    if pre.list_commands {
+        if let Some(pat) = &pre.search_pattern {
+            commands = filter_by_search(commands, pat);
+            if commands.is_empty() {
+                if pre.json_output || pre.agent {
+                    list_commands(&commands, &list_opts)?;
+                } else {
+                    println!("\nNo tools matching '{pat}'.");
+                }
+                return Ok(());
+            }
+            if !pre.quiet_list() {
+                println!("\nTools matching '{pat}':");
+            }
+        } else if !pre.quiet_list() {
+            println!("\nAvailable tools:");
+        }
+        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+        return list_commands(&commands, &list_opts);
+    }
 
     if remaining.is_empty() {
-        if !pre.compact && !pre.json_output {
+        if !pre.quiet_list() {
             println!("Available tools:");
         }
         let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
         list_commands(&commands, &list_opts)?;
-        if !pre.compact && !pre.json_output {
+        if !pre.quiet_list() {
             println!("\nUse --list for the same output, or provide a subcommand.");
         }
         return Ok(());
     }
 
-    if remaining.get(1).map(String::as_str) == Some("--help")
-        || remaining.get(1).map(String::as_str) == Some("-h")
-    {
-        if let Some(cmd) = commands.iter().find(|c| c.name == remaining[0]) {
-            print_command_help(cmd);
-            return Ok(());
-        }
+    if maybe_tool_help(&commands, remaining, pre)? {
+        return Ok(());
     }
 
     let parsed = match parse_tool_args(&commands, remaining) {
@@ -605,7 +582,7 @@ fn dispatch_mcp_stdio(
         &env_vars,
         &tool_name,
         arguments,
-        pre.json_output,
+        pre.full_envelope(),
     ))?;
     output_result(data, &pre.output_options())?;
     let _ = record_usage(&src_hash, &tool_name);
@@ -735,58 +712,88 @@ fn dispatch_session(
         return Ok(());
     }
 
-    let tools_val = crate::session::session_request(
-        name,
-        "list_tools",
-        serde_json::json!({ "refresh": pre.refresh }),
-    )?;
-    let tools = tools_val
-        .as_array()
-        .cloned()
-        .ok_or_else(|| Error::runtime("session list_tools did not return an array"))?;
-    let mut commands = apply_bake_filter(tools_to_commands(&tools), bake);
     let src_hash = source_hash_for(&format!("session:{name}"));
+    let list_opts = ListOptions::from_global(pre, ListStyle::Mcp);
+    let needs_catalog = pre.list_commands
+        || pre.describe.is_some()
+        || remaining.is_empty()
+        || remaining.get(1).map(String::as_str) == Some("--help")
+        || remaining.get(1).map(String::as_str) == Some("-h");
 
-    let list_opts = ListOptions {
-        verbose: pre.verbose,
-        compact: pre.compact,
-        json_output: pre.json_output,
-        pretty: pre.pretty,
-        style: ListStyle::Mcp,
+    let load_catalog = || -> Result<Vec<crate::CommandDef>> {
+        let tools_val = crate::session::session_request(
+            name,
+            "list_tools",
+            serde_json::json!({ "refresh": pre.refresh }),
+        )?;
+        let tools = tools_val
+            .as_array()
+            .cloned()
+            .ok_or_else(|| Error::runtime("session list_tools did not return an array"))?;
+        Ok(apply_bake_filter(tools_to_commands(&tools), bake))
     };
 
-    if pre.list_commands {
-        if let Some(pat) = &pre.search_pattern {
-            commands = filter_by_search(commands, pat);
-            if commands.is_empty() {
-                if pre.json_output {
-                    list_commands(&commands, &list_opts)?;
-                } else {
-                    println!("\nNo tools matching '{pat}'.");
-                }
-                return Ok(());
-            }
-            if !pre.compact && !pre.json_output {
-                println!("\nTools matching '{pat}':");
-            }
-        } else if !pre.compact && !pre.json_output {
-            println!("\nAvailable tools:");
+    if needs_catalog {
+        let mut commands = load_catalog()?;
+
+        if let Some(dname) = &pre.describe {
+            let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+            return describe_tool(&commands, dname, pre);
         }
-        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
-        return list_commands(&commands, &list_opts);
+
+        if pre.list_commands {
+            if let Some(pat) = &pre.search_pattern {
+                commands = filter_by_search(commands, pat);
+                if commands.is_empty() {
+                    if pre.json_output || pre.agent {
+                        list_commands(&commands, &list_opts)?;
+                    } else {
+                        println!("\nNo tools matching '{pat}'.");
+                    }
+                    return Ok(());
+                }
+                if !pre.quiet_list() {
+                    println!("\nTools matching '{pat}':");
+                }
+            } else if !pre.quiet_list() {
+                println!("\nAvailable tools:");
+            }
+            let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+            return list_commands(&commands, &list_opts);
+        }
+
+        if remaining.is_empty() {
+            if !pre.quiet_list() {
+                println!("Available tools:");
+            }
+            let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
+            list_commands(&commands, &list_opts)?;
+            if !pre.quiet_list() {
+                println!("\nUse --list for the same output, or provide a subcommand.");
+            }
+            return Ok(());
+        }
+
+        if maybe_tool_help(&commands, remaining, pre)? {
+            return Ok(());
+        }
     }
 
-    if remaining.is_empty() {
-        if !pre.compact && !pre.json_output {
-            println!("Available tools:");
-        }
-        let commands = apply_list_options(commands, &src_hash, pre.sort.as_deref(), pre.top);
-        list_commands(&commands, &list_opts)?;
-        if !pre.compact && !pre.json_output {
-            println!("\nUse --list for the same output, or provide a subcommand.");
-        }
-        return Ok(());
-    }
+    // Call path: fetch one tool schema over IPC (daemon cache), not the full catalog.
+    let tname = remaining
+        .first()
+        .ok_or_else(|| Error::usage("no subcommand specified"))?;
+    let tool_val = crate::session::session_request(
+        name,
+        "get_tool",
+        serde_json::json!({ "name": tname, "refresh": pre.refresh }),
+    )?;
+    let commands = if tool_val.is_null() {
+        load_catalog()?
+    } else {
+        let one = tools_to_commands(std::slice::from_ref(&tool_val));
+        apply_bake_filter(one, bake)
+    };
 
     let parsed = match parse_tool_args(&commands, remaining) {
         Err(Error::Usage(msg)) if msg == "__help__" => return Ok(()),
@@ -819,7 +826,7 @@ fn dispatch_session(
         serde_json::json!({
             "name": tool_name,
             "arguments": arguments,
-            "full_envelope": pre.json_output,
+            "full_envelope": pre.full_envelope(),
         }),
     )?;
     output_result(data, &pre.output_options())?;

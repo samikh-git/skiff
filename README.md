@@ -106,11 +106,19 @@ Configs: `$MCP2CLI_CONFIG_DIR/baked.json` (default `~/.config/mcp2cli/baked.json
 
 Cursor skill for agents: [`.cursor/skills/mcp2cli/`](.cursor/skills/mcp2cli/).
 
+Token-efficient agent path: `--agent` (or `MCP2CLI_AGENT=1`) → progressive `--detail names|brief` → `--describe` / `TOOL --help --json` → `--json` or `--toon`. Oversized results spill to `$MCP2CLI_CACHE_DIR/spool/` with a small stdout pointer for `rg`.
+
+Cloudflare MCP byte bench (optional):
+
+```bash
+CF_API_TOKEN=… MCP2CLI_BENCH_CF=1 cargo test --test cloudflare_bench -- --ignored --nocapture
+```
+
 ## Status / limits
 
-Shipped: OpenAPI, MCP stdio/HTTP (streamable + SSE), OAuth, GraphQL, sessions (Unix), bake/`@name`, list/search/output flags.
+Shipped: OpenAPI, MCP stdio/HTTP (streamable + SSE), OAuth, GraphQL, sessions (Unix), bake/`@name`, list/search/output flags, native `--toon`, `--envelope`, spool overflow, `--agent` defaults.
 
-Still thin: `--toon` warns and falls back to JSON; no Windows sessions; no mid-daemon OAuth refresh (restart the session if the token TTL is shorter than idle).
+Still thin: no Windows sessions; no mid-daemon OAuth refresh (restart the session if the token TTL is shorter than idle).
 
 ## License
 

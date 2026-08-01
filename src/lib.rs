@@ -20,6 +20,7 @@ pub mod openapi;
 pub mod output;
 pub mod paths;
 pub mod session;
+pub mod spool;
 pub mod usage;
 
 pub use error::{Error, Result};

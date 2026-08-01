@@ -7,6 +7,7 @@ use serde_json::Value;
 #[serde(rename_all = "snake_case")]
 pub enum SessionMethod {
     ListTools,
+    GetTool,
     CallTool,
     ListResources,
     ReadResource,
@@ -19,6 +20,7 @@ impl SessionMethod {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::ListTools => "list_tools",
+            Self::GetTool => "get_tool",
             Self::CallTool => "call_tool",
             Self::ListResources => "list_resources",
             Self::ReadResource => "read_resource",
@@ -31,6 +33,7 @@ impl SessionMethod {
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s {
             "list_tools" => Self::ListTools,
+            "get_tool" => Self::GetTool,
             "call_tool" => Self::CallTool,
             "list_resources" => Self::ListResources,
             "read_resource" => Self::ReadResource,

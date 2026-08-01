@@ -124,7 +124,54 @@ pub fn param_to_json(p: &ParamDef) -> Value {
     d
 }
 
-/// Serialize a command for `--list --json`.
+/// List / help JSON detail level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ListDetail {
+    /// Tool names only.
+    Names,
+    /// Name + short description (default for `--json` lists).
+    #[default]
+    Brief,
+    /// Full parameter schemas ([`command_to_json`]).
+    Full,
+}
+
+impl ListDetail {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "names" => Some(Self::Names),
+            "brief" => Some(Self::Brief),
+            "full" => Some(Self::Full),
+            _ => None,
+        }
+    }
+}
+
+/// Name + truncated description for progressive discovery.
+pub fn command_to_brief_json(cmd: &CommandDef) -> Value {
+    let desc = if cmd.description.len() > 120 {
+        let truncated = &cmd.description[..120];
+        match truncated.rsplit_once(' ') {
+            Some((head, _)) => format!("{head}..."),
+            None => format!("{truncated}..."),
+        }
+    } else {
+        cmd.description.clone()
+    };
+    let mut d = serde_json::json!({
+        "name": cmd.name,
+        "description": desc,
+    });
+    if let Some(m) = &cmd.method {
+        d["method"] = Value::String(m.to_uppercase());
+    }
+    if let Some(op) = &cmd.graphql_operation_type {
+        d["operationType"] = Value::String(op.clone());
+    }
+    d
+}
+
+/// Serialize a command for `--list --json --detail full` / `TOOL --help --json`.
 pub fn command_to_json(cmd: &CommandDef) -> Value {
     let mut d = serde_json::json!({
         "name": cmd.name,
@@ -144,4 +191,18 @@ pub fn command_to_json(cmd: &CommandDef) -> Value {
         d["operationType"] = Value::String(op.clone());
     }
     d
+}
+
+/// Serialize commands at the requested detail level.
+pub fn commands_to_json(commands: &[CommandDef], detail: ListDetail) -> Value {
+    match detail {
+        ListDetail::Names => Value::Array(
+            commands
+                .iter()
+                .map(|c| Value::String(c.name.clone()))
+                .collect(),
+        ),
+        ListDetail::Brief => Value::Array(commands.iter().map(command_to_brief_json).collect()),
+        ListDetail::Full => Value::Array(commands.iter().map(command_to_json).collect()),
+    }
 }

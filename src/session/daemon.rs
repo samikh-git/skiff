@@ -244,6 +244,27 @@ async fn dispatch(state: &Arc<Mutex<DaemonState>>, req: &SessionRequest) -> Resu
             st.tools_cache = Some(tools.clone());
             Ok(Value::Array(tools))
         }
+        SessionMethod::GetTool => {
+            let name = req
+                .params
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| Error::usage("get_tool requires params.name"))?;
+            let refresh = req
+                .params
+                .get("refresh")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if refresh || st.tools_cache.is_none() {
+                let tools = list_tools_on(client).await?;
+                st.tools_cache = Some(tools);
+            }
+            let tools = st.tools_cache.as_ref().unwrap();
+            let found = tools
+                .iter()
+                .find(|t| t.get("name").and_then(|n| n.as_str()) == Some(name));
+            Ok(found.cloned().unwrap_or(Value::Null))
+        }
         SessionMethod::CallTool => {
             let name = req
                 .params

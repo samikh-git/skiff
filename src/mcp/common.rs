@@ -6,6 +6,7 @@ use serde_json::{json, Map, Value};
 use crate::error::{Error, Result};
 use crate::mcp::extract_mcp_commands;
 use crate::model::CommandDef;
+use crate::spool::write_spool;
 
 pub type McpClient = rmcp::service::RunningService<rmcp::RoleClient, ()>;
 
@@ -23,25 +24,84 @@ pub fn tools_from_rmcp(tools: impl IntoIterator<Item = rmcp::model::Tool>) -> Ve
     out
 }
 
+fn spool_base64_blob(data_b64: &str, mime: &str, kind: &str) -> Result<Value> {
+    use base64::Engine;
+    // Prefer decode when possible; otherwise store the base64 text.
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(data_b64)
+        .unwrap_or_else(|_| data_b64.as_bytes().to_vec());
+    let path = write_spool(&raw, "bin")?;
+    eprintln!(
+        "mcp2cli: spooled {kind} content ({mime}, {} bytes) to {}",
+        raw.len(),
+        path.display()
+    );
+    Ok(json!({
+        "type": kind,
+        "mimeType": mime,
+        "bytes": raw.len(),
+        "path": path.display().to_string(),
+        "spooled": true,
+        "hint": format!("file '{}'", path.display()),
+    }))
+}
+
+/// Format a tool result for agents: content-only by default; spool non-text blobs.
 pub fn format_tool_result(result: &CallToolResult, full_envelope: bool) -> Result<Value> {
     if full_envelope {
         return serde_json::to_value(result).map_err(|e| Error::runtime(e.to_string()));
     }
 
     let mut texts = Vec::new();
+    let mut extras = Vec::new();
+
     for block in &result.content {
         if let Some(t) = block.as_text() {
             texts.push(t.text.clone());
+            continue;
         }
+        if let Some(img) = block.as_image() {
+            extras.push(spool_base64_blob(&img.data, &img.mime_type, "image")?);
+            continue;
+        }
+        if let Some(audio) = block.as_audio() {
+            extras.push(spool_base64_blob(&audio.data, &audio.mime_type, "audio")?);
+            continue;
+        }
+        // resource / resource_link / unknown — stub without dumping
+        extras.push(json!({
+            "type": "other",
+            "note": "non-text content omitted; use --envelope for wire form",
+        }));
     }
+
+    if texts.is_empty() && extras.is_empty() {
+        return Ok(Value::Null);
+    }
+
+    if texts.is_empty() {
+        return Ok(if extras.len() == 1 {
+            extras.pop().unwrap()
+        } else {
+            Value::Array(extras)
+        });
+    }
+
     let text = texts.join("\n");
-    if text.is_empty() {
-        Ok(serde_json::to_value(result).unwrap_or(Value::Null))
-    } else if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
-        Ok(parsed)
+    let text_val = if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
+        parsed
     } else {
-        Ok(Value::String(text))
+        Value::String(text)
+    };
+
+    if extras.is_empty() {
+        return Ok(text_val);
     }
+
+    Ok(json!({
+        "text": text_val,
+        "attachments": extras,
+    }))
 }
 
 pub fn tools_to_commands(tools: &[Value]) -> Vec<CommandDef> {
