@@ -42,7 +42,7 @@ pub fn peer_uid<S: AsRawFd>(stream: &S) -> io::Result<u32> {
         if rc != 0 {
             return Err(io::Error::last_os_error());
         }
-        Ok(cred.uid as u32)
+        Ok(cred.uid)
     }
     #[cfg(not(any(
         target_os = "macos",

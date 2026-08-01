@@ -76,7 +76,7 @@ jobs:
             ### Install
             ```bash
             brew tap samikh-git/tools && brew install skiff
-            cargo install skiff
+            cargo install skiff-cli
             ```
 
             Or download a binary tarball from the assets below.

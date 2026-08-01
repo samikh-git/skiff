@@ -11,8 +11,8 @@ Inspired by [knowsuchagency/mcp2cli](https://github.com/knowsuchagency/mcp2cli) 
 brew tap samikh-git/tools
 brew install skiff
 
-# crates.io
-cargo install skiff
+# crates.io (package name skiff-cli; binary is skiff)
+cargo install skiff-cli
 
 # from source
 cargo install --git https://github.com/samikh-git/skiff --locked

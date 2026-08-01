@@ -65,3 +65,4 @@ When changing discovery/index/session paths, re-run at least `tools_index` unit 
 - Do **not** add `Co-authored-by: Cursor` (or similar bot trailers) to commits.
 - Do not force-push `main`/`master`. Feature branches may be rewritten only when the user asks.
 - Prefer small, focused commits; do not commit secrets or unrelated drive-bys unless requested.
+- crates.io package: `skiff-cli` (binary `skiff`; name `skiff` was taken).

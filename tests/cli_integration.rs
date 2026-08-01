@@ -163,7 +163,7 @@ fn openapi_list_pets_limit_and_create() {
 fn openapi_load_local_json_file() {
     let spec = fixtures_dir().join("petstore.json");
     let data =
-        skiff::openapi::load_openapi_spec(spec.to_str().unwrap(), &[], None, Some(3600), false)
+        skiff_cli::openapi::load_openapi_spec(spec.to_str().unwrap(), &[], None, Some(3600), false)
             .unwrap();
     assert!(data.get("paths").unwrap().get("/pets").is_some());
 }
