@@ -1,4 +1,11 @@
-//! Cache and config directory resolution (Python-compatible paths).
+//! Cache and config directory resolution (Python-compatible layout).
+//!
+//! - Cache: `$MCP2CLI_CACHE_DIR` or `~/.cache/mcp2cli` (tool lists, GraphQL/OpenAPI,
+//!   OAuth, sessions, usage)
+//! - Config: `$MCP2CLI_CONFIG_DIR` or `~/.config/mcp2cli` (`baked.json`)
+//!
+//! Tests may override via [`set_cache_dir_override`] / [`set_config_dir_override`]
+//! under [`TEST_PATHS_LOCK`].
 
 use std::path::PathBuf;
 use std::sync::{LazyLock, RwLock};

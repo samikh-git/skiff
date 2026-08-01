@@ -1,4 +1,8 @@
-//! Named MCP session daemons over Unix-domain sockets.
+//! Named MCP session daemons over Unix-domain sockets (Unix only).
+//!
+//! One session name → one long-lived [`crate::mcp::McpClient`]. Ephemeral CLI
+//! processes speak NDJSON over AF_UNIX (`list_tools`, `call_tool`, resources,
+//! prompts). See crate README for layout, idle timeout, and security model.
 
 #[cfg(unix)]
 mod client;

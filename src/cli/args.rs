@@ -1,4 +1,7 @@
-//! Global CLI flags (pre-parser).
+//! Global CLI flags parsed after [`crate::cli::split_at_subcommand`].
+//!
+//! Source flags are mutually exclusive at dispatch time. Session and OAuth
+//! helpers live here so clap help stays the single source of user-facing docs.
 
 use clap::Parser;
 
@@ -7,21 +10,21 @@ use crate::paths::DEFAULT_CACHE_TTL;
 #[derive(Debug, Clone, Parser)]
 #[command(
     name = "mcp2cli",
-    about = "Turn any MCP server or OpenAPI spec into a CLI",
+    about = "Turn any MCP server, OpenAPI spec, or GraphQL endpoint into a CLI",
     version,
     disable_help_subcommand = true,
     allow_hyphen_values = true
 )]
 pub struct GlobalArgs {
-    /// OpenAPI spec URL or file path
+    /// OpenAPI spec URL or local file
     #[arg(long)]
     pub spec: Option<String>,
 
-    /// MCP server URL (HTTP)
+    /// MCP server URL (HTTP streamable / SSE)
     #[arg(long)]
     pub mcp: Option<String>,
 
-    /// MCP server command (stdio)
+    /// MCP server as a shell command (stdio transport)
     #[arg(long)]
     pub mcp_stdio: Option<String>,
 
@@ -29,7 +32,7 @@ pub struct GlobalArgs {
     #[arg(long)]
     pub graphql: Option<String>,
 
-    /// HTTP header as Name:Value (repeatable)
+    /// HTTP header as Name:Value (repeatable; value may use env:/file:)
     #[arg(long = "auth-header", value_name = "Name:Value")]
     pub auth_header: Vec<String>,
 
@@ -137,31 +140,31 @@ pub struct GlobalArgs {
     #[arg(long = "oauth-clear")]
     pub oauth_clear: bool,
 
-    /// Start a persistent MCP session daemon
+    /// Start a named MCP session daemon (requires --mcp or --mcp-stdio; Unix)
     #[arg(long = "session-start", value_name = "NAME")]
     pub session_start: Option<String>,
 
-    /// Route command through an existing session daemon
+    /// Use an existing session daemon instead of a one-shot MCP connect (Unix)
     #[arg(long = "session", value_name = "NAME")]
     pub session: Option<String>,
 
-    /// Stop a named session daemon
+    /// Stop a named session daemon (SIGTERM, then SIGKILL; Unix)
     #[arg(long = "session-stop", value_name = "NAME")]
     pub session_stop: Option<String>,
 
-    /// List session daemons
+    /// List session daemons (use --json for machine-readable output)
     #[arg(long = "session-list")]
     pub session_list: bool,
 
-    /// Idle timeout for session daemons in seconds (0 = never). Default 1800.
+    /// Session idle exit after N seconds of no IPC (default 1800; 0 = never)
     #[arg(long = "session-idle-secs", value_name = "SECS")]
     pub session_idle_secs: Option<u64>,
 
-    /// Scrub inherited env for stdio session children (keep PATH/HOME/LANG + --env)
+    /// For stdio sessions: child gets only PATH/HOME/LANG/TMP* plus --env
     #[arg(long = "session-clean-env")]
     pub session_clean_env: bool,
 
-    /// List MCP resources (session or ephemeral MCP)
+    /// List MCP resources (via --session today)
     #[arg(long = "list-resources")]
     pub list_resources: bool,
 

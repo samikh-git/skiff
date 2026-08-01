@@ -1,4 +1,7 @@
-//! Top-level CLI dispatch.
+//! Top-level CLI dispatch: bake / `@name` / sessions / OpenAPI / MCP / GraphQL.
+//!
+//! Session lifecycle and `--session` IPC run before source-mode mutual exclusion
+//! so agents can stop/list without repeating `--mcp*`.
 
 use std::ffi::OsString;
 

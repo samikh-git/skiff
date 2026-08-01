@@ -1,4 +1,4 @@
-//! Value coercion and naming helpers (Python `coerce_value`, `to_kebab`, …).
+//! Value coercion and naming (`to_kebab`, JSON Schema → CLI values, `env:`/`file:` secrets).
 
 use regex::Regex;
 use serde_json::{json, Value};

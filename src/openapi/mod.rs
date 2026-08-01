@@ -1,4 +1,7 @@
-//! OpenAPI $ref resolution, command extraction, and execution.
+//! OpenAPI `$ref` resolution, command extraction, and HTTP execution.
+//!
+//! Specs load from file or URL (URL responses cached under `$MCP2CLI_CACHE_DIR`).
+//! Remote fetches are not SSRF-sandboxed — only pass trusted URLs.
 
 mod execute;
 mod extract;
@@ -16,7 +19,7 @@ use crate::cache::{cache_key_for, load_cached, save_cache};
 use crate::error::{Error, Result};
 use crate::paths::DEFAULT_CACHE_TTL;
 
-/// Load an OpenAPI spec from a local file (URL fetch comes with HTTP client wiring).
+/// Load an OpenAPI spec from a local JSON/YAML file.
 pub fn load_openapi_spec_file(path: &Path) -> Result<Value> {
     let raw = fs::read_to_string(path)?;
     parse_spec(&raw)

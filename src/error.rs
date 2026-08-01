@@ -1,6 +1,7 @@
-//! Error types and process exit codes for mcp2cli.
+//! Error types and process exit codes.
 //!
-//! Exit codes: `2` = usage/args, `1` = runtime/tool failure.
+//! - Exit `2` — usage / bad args ([`Error::Usage`])
+//! - Exit `1` — runtime / tool / I/O failure
 
 use std::fmt;
 

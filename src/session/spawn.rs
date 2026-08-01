@@ -1,4 +1,8 @@
-//! Spawn and manage session daemon processes.
+//! Spawn / stop / list session daemons.
+//!
+//! Start writes a `0o600` config JSON and execs
+//! `current_exe() __session_daemon <config-path>` in a new process group.
+//! Stop sends SIGTERM then SIGKILL after 2s.
 
 use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};

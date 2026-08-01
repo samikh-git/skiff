@@ -1,4 +1,6 @@
-//! stdout/stderr output helpers — stdout is data only.
+//! stdout is data only; diagnostics go to stderr.
+//!
+//! `--toon` is accepted for CLI parity but currently warns and emits JSON.
 
 use std::io::{self, IsTerminal, Write};
 
@@ -30,7 +32,7 @@ fn emit_json(data: &Value, pretty: bool) -> io::Result<()> {
 
 /// Print result respecting `--json` / `--raw` / `--pretty` / `--head` / `--toon`.
 ///
-/// TOON encoding is deferred (M1); `--toon` currently warns and falls back to JSON.
+/// `--toon` warns and falls back to JSON until a native encoder ships.
 pub fn output_result(data: Value, opts: &OutputOptions) -> io::Result<()> {
     if opts.json_output {
         let mut data = data;

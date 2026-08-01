@@ -1,4 +1,8 @@
-//! CLI parsing helpers (two-pass argv split) and dispatch.
+//! CLI: two-pass argv split, clap globals, and mode dispatch.
+//!
+//! [`split_at_subcommand`] keeps tool flags (e.g. a tool named `--env`) out of
+//! the global parser (upstream GH #15). Session start/stop/list and `--session`
+//! are handled before source-mode mutual exclusion.
 
 pub mod args;
 pub mod bake;

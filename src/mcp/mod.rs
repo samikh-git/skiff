@@ -1,4 +1,8 @@
-//! MCP tool extraction and client transports.
+//! MCP client transports and tool → CLI mapping.
+//!
+//! - [`stdio`](stdio) — child-process MCP (`--mcp-stdio`)
+//! - [`transport`](transport) — HTTP with `auto` / `streamable` / `sse`
+//! - [`tools_to_commands`] — JSON Schema → [`crate::model::CommandDef`]
 
 mod common;
 mod http;

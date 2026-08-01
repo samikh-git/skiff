@@ -1,4 +1,7 @@
-//! mcp2cli — Turn any MCP server or OpenAPI spec into a CLI.
+//! mcp2cli — turn any MCP server, OpenAPI spec, or GraphQL endpoint into a CLI.
+//!
+//! Library entry is [`run`]. The binary is a thin wrapper; session daemons reuse
+//! the same binary via the hidden `__session_daemon <config-path>` argv form.
 //!
 //! Rust port of <https://github.com/knowsuchagency/mcp2cli>.
 
@@ -25,7 +28,7 @@ pub use model::{CommandDef, ParamDef, ParamLocation, ParamType};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-/// Library entry used by the binary.
+/// Run the CLI with `argv` (no program name). Returns [`Error`] for exit mapping.
 pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<()> {
     let args: Vec<OsString> = args.into_iter().collect();
     // Hidden daemon entry: mcp2cli __session_daemon <config-path>

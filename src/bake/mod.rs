@@ -1,4 +1,7 @@
-//! Bake mode — saved connection configs in `~/.config/mcp2cli/baked.json`.
+//! Bake mode — named connection configs in `$MCP2CLI_CONFIG_DIR/baked.json`.
+//!
+//! `@name` expands via [`BakedTool::to_argv`]. Prefer `env:`/`file:` secrets;
+//! [`BakedTool::masked_for_display`] is used by `bake show`.
 
 use std::collections::BTreeMap;
 use std::fs;

@@ -1,4 +1,8 @@
-//! Session daemon process: holds MCP client, serves NDJSON over AF_UNIX.
+//! Session daemon: hold one MCP client, serve NDJSON over AF_UNIX.
+//!
+//! Accepts concurrent IPC clients; MCP RPCs are serialized with a mutex.
+//! Tool schemas are cached in-memory (`list_tools` + `refresh: true` busts).
+//! Idle / SIGTERM exits unlink meta + sock.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

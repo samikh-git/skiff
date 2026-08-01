@@ -1,4 +1,7 @@
-//! Restricted directory/file creation helpers (Unix).
+//! Restricted directory/file creation (`0o700` dirs, `0o600` files on Unix).
+//!
+//! Prefer [`atomic_write_0600`] / [`ensure_dir_0700`] over bare `fs::write` for
+//! anything that may hold secrets or session metadata.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;

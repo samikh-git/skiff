@@ -1,4 +1,8 @@
-//! OAuth 2.1 for MCP HTTP / OpenAPI — wraps `rmcp::transport::auth`.
+//! OAuth 2.1 for MCP HTTP / OpenAPI / GraphQL — wraps `rmcp::transport::auth`.
+//!
+//! Credentials and sticky redirect metadata live under
+//! `$MCP2CLI_CACHE_DIR/oauth/<server-hash>/` with `0o700` dirs and `0o600` files.
+//! Authorization-code callbacks bind loopback only; sticky URIs are re-validated.
 
 mod browser;
 mod callback;
