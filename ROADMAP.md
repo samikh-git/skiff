@@ -15,7 +15,7 @@ Near-term focus: make agent MCP workflows reliable end-to-end (install → warm 
 
 1. ~~**Skill-from-API playbook**~~ — done in [`skills/skiff/SKILL.md`](skills/skiff/SKILL.md) (2026-08-01)
 2. ~~**Document exit-code contract**~~ — done in README + skill
-3. **Import editor MCP configs** (Cursor `mcp.json` / Claude) → `bake create` or one-shot list — onboarding win from mcpx/mcporter
+3. ~~**Import editor MCP configs**~~ — `skiff bake import` (Cursor/Claude JSON, Codex TOML)
 4. **Shell completion** for bake names + common flags (optionally warm-index tool names)
 5. **Dogfood real MCPs**; fix whatever early users hit first
 6. **OpenAPI realism** when a real bake target fails (path-level params, form-urlencoded, external `$ref`)
@@ -89,10 +89,11 @@ Against **Python mcp2cli 3.3.1** (`uvx --with mcp==1.12.0 mcp2cli`) and **skiff 
 
 ### First implementation PR (recommended)
 
-Landed in this research pass:
+Landed:
 
 1. Auth/`Bearer:env:` secret resolution + bench harness `env:` auth
 2. Expanded **skill-from-API** playbook + exit codes in skill/README
 3. Honest competitive notes (Python has sessions; skiff still faster)
+4. **`skiff bake import`** from Cursor / Claude / Codex MCP configs
 
-**Next PR after this:** editor MCP config import (`mcp.json` → bake) **or** shell completion for bake names — highest remaining onboarding wins from mcpx/mcpli.
+**Next PR:** shell completion for bake names + common flags.

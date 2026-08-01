@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "Docs by LangChain": {
+      "url": "https://docs.langchain.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${API_TOKEN}"
+      }
+    },
+    "local-fs": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "env": {
+        "DEBUG": "1",
+        "TOKEN": "${SECRET_TOKEN}"
+      }
+    }
+  }
+}

@@ -50,6 +50,7 @@ open = "5"
 libc = "0.2"
 base64 = "0.22"
 toon-format = { version = "0.5", default-features = false }
+toml = "0.8"
 
 [dev-dependencies]
 assert_cmd = "2"

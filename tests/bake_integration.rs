@@ -416,3 +416,92 @@ fn bake_install_default_dir_path_note() {
 
     assert!(Path::new(&custom).join("warn-test").exists());
 }
+
+#[test]
+fn bake_import_from_json_fixture() {
+    let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let env = IsolatedEnv::new();
+    let fixture = fixtures_dir().join("editor_mcp.json");
+
+    env.cmd()
+        .args([
+            "bake",
+            "import",
+            "--path",
+            fixture.to_str().unwrap(),
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("docs-by-langchain"))
+        .stdout(predicate::str::contains("local-fs"))
+        .stdout(predicate::str::contains("Dry run"));
+
+    env.cmd()
+        .args(["bake", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("docs-by-langchain").not());
+
+    env.cmd()
+        .args(["bake", "import", "--path", fixture.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Imported"))
+        .stdout(predicate::str::contains("@docs-by-langchain"));
+
+    let out = env
+        .cmd()
+        .args(["bake", "show", "docs-by-langchain"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let data: Value = serde_json::from_slice(&out).unwrap();
+    assert_eq!(data["source_type"], "mcp");
+    assert_eq!(data["source"], "https://docs.langchain.com/mcp");
+    let headers = data["auth_headers"].as_array().unwrap();
+    assert_eq!(headers[0][1], "Bearer:env:API_TOKEN");
+
+    let out = env
+        .cmd()
+        .args(["bake", "show", "local-fs"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let data: Value = serde_json::from_slice(&out).unwrap();
+    assert_eq!(data["source_type"], "mcp_stdio");
+    assert!(data["env_vars"]["DEBUG"] == "1");
+    assert!(data["env_vars"].get("TOKEN").is_none());
+}
+
+#[test]
+fn bake_import_from_toml_and_name_filter() {
+    let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let env = IsolatedEnv::new();
+    let fixture = fixtures_dir().join("editor_mcp.toml");
+
+    env.cmd()
+        .args([
+            "bake",
+            "import",
+            "--path",
+            fixture.to_str().unwrap(),
+            "--name",
+            "github",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("@github"))
+        .stdout(predicate::str::contains("deepwiki").not());
+
+    env.cmd()
+        .args(["bake", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("github"))
+        .stdout(predicate::str::contains("deepwiki").not());
+}

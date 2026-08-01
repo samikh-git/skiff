@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+use crate::bake::import::{import_mcp_servers, ImportFrom, ImportOptions};
 use crate::bake::{
     create_baked, default_install_dir, install_wrapper, load_baked_all, parse_auth_header_raw,
     parse_env_raw, remove_baked, require_baked, split_csv_list, split_methods, update_baked,
@@ -39,6 +40,27 @@ enum BakeCommand {
     Update(UpdateArgs),
     /// Create a ~/.local/bin wrapper script
     Install(InstallArgs),
+    /// Import MCP servers from Cursor / Claude / Codex configs into bake
+    Import(ImportArgs),
+}
+
+#[derive(Debug, Parser)]
+struct ImportArgs {
+    /// Config source: auto (default), cursor, claude, or codex
+    #[arg(long, default_value = "auto", value_parser = ["auto", "cursor", "claude", "codex"])]
+    from: String,
+    /// Explicit config file (JSON or TOML); overrides --from discovery paths
+    #[arg(long)]
+    path: Option<PathBuf>,
+    /// Import only this server (editor name or bake name)
+    #[arg(long)]
+    name: Option<String>,
+    /// Overwrite existing baked tools with the same name
+    #[arg(long)]
+    force: bool,
+    /// Print planned imports without writing baked.json
+    #[arg(long)]
+    dry_run: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -153,6 +175,7 @@ pub fn handle_bake(argv: &[OsString]) -> Result<()> {
         }
         Some(BakeCommand::Update(args)) => bake_update(args),
         Some(BakeCommand::Install(args)) => bake_install(args),
+        Some(BakeCommand::Import(args)) => bake_import(args),
     }
 }
 
@@ -165,7 +188,52 @@ fn print_bake_help() {
     println!("  remove    Delete a baked tool");
     println!("  update    Update settings on an existing baked tool");
     println!("  install   Create a ~/.local/bin wrapper script");
+    println!("  import    Import MCP servers from Cursor/Claude/Codex into bake");
     println!("\nRun 'skiff bake <command> --help' for command-specific help.");
+}
+
+fn bake_import(args: ImportArgs) -> Result<()> {
+    let from = if args.path.is_some() {
+        ImportFrom::Auto // path takes precedence inside resolve_sources
+    } else {
+        ImportFrom::parse(&args.from)?
+    };
+    let report = import_mcp_servers(&ImportOptions {
+        from,
+        path: args.path,
+        name: args.name,
+        force: args.force,
+        dry_run: args.dry_run,
+    })?;
+
+    if report.imported.is_empty() && report.skipped.is_empty() {
+        println!("No MCP servers imported.");
+        return Ok(());
+    }
+
+    let verb = if report.dry_run {
+        "Would import"
+    } else {
+        "Imported"
+    };
+    for c in &report.imported {
+        println!(
+            "{verb} '{}' → @{} ({}) from {}",
+            c.editor_name, c.bake_name, c.tool.source_type, c.source_label
+        );
+        for w in &c.warnings {
+            eprintln!("  warning: {w}");
+        }
+    }
+    for s in &report.skipped {
+        println!("Skipped {s}");
+    }
+    if report.dry_run {
+        println!("Dry run only — re-run without --dry-run to write baked.json");
+    } else if !report.imported.is_empty() {
+        println!("Use: skiff @NAME --agent --list");
+    }
+    Ok(())
 }
 
 fn bake_create(args: CreateArgs) -> Result<()> {

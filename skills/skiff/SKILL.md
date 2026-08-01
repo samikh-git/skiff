@@ -5,8 +5,8 @@ description: >-
   Rust skiff binary. Use when calling MCP tools, listing OpenAPI/GraphQL
   operations, bake/@name configs, session daemons, or token-efficient agent
   discovery (--agent, --detail, --describe, spool). Triggers: skiff, --mcp,
-  --mcp-stdio, --spec, --graphql, bake, @name, session-start, --agent,
-  "list tools from this server".
+  --mcp-stdio, --spec, --graphql, bake, bake import, @name, session-start,
+  --agent, "list tools from this server", "import mcp.json".
 ---
 
 # skiff
@@ -139,6 +139,9 @@ skiff --mcp-stdio "…" --get-prompt echo --prompt-arg message=hi --json
 
 ```bash
 skiff bake create myfs --mcp-stdio "npx -y …" --session myfs
+skiff bake import --dry-run          # Cursor / Claude / Codex MCP configs
+skiff bake import --from cursor
+skiff bake import --path ./mcp.json --name server-key
 skiff @myfs --list    # needs session already started if bake has --session
 skiff bake show myfs  # secrets masked
 ```

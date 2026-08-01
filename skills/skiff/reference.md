@@ -71,6 +71,16 @@ skiff doctor --json
 
 Prints binary version/PATH, cache/config dirs, spool/oauth/session/bake summary, and install hints.
 
+## Bake import
+
+```bash
+skiff bake import --dry-run
+skiff bake import --from cursor|claude|codex|auto
+skiff bake import --path ./mcp.json --name my-server --force
+```
+
+Maps Cursor/Claude `mcpServers` (JSON) and Codex `[mcp_servers]` (TOML) into bake. HTTP `url`/`serverUrl` → `--mcp`; `command`+`args` → `--mcp-stdio`. Header values like `Bearer ${TOKEN}` become `Bearer:env:TOKEN`.
+
 ## Exit codes
 
 | Code | Meaning |

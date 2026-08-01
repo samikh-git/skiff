@@ -3,6 +3,8 @@
 //! `@name` expands via [`BakedTool::to_argv`]. Prefer `env:`/`file:` secrets;
 //! [`BakedTool::masked_for_display`] is used by `bake show`.
 
+pub mod import;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -237,7 +239,14 @@ impl BakedTool {
 }
 
 fn mask_secret(val: &str) -> String {
-    if val.starts_with("env:") || val.starts_with("file:") {
+    let v = val.trim();
+    if v.starts_with("env:")
+        || v.starts_with("file:")
+        || v.starts_with("Bearer:env:")
+        || v.starts_with("Bearer:file:")
+        || v.starts_with("Bearer env:")
+        || v.starts_with("Bearer file:")
+    {
         val.to_string()
     } else if val.len() > 4 {
         format!("{}****", &val[..4])

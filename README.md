@@ -123,6 +123,11 @@ skiff bake create petstore --spec ./tests/fixtures/petstore.json --methods GET,P
 skiff bake create mytools \
   --mcp-stdio "python3 ./tests/fixtures/mcp_test_server.py" --exclude deploy --session myfs
 
+# Import servers already configured in Cursor / Claude / Codex
+skiff bake import --dry-run
+skiff bake import --from cursor
+skiff bake import --path ./mcp.json --name my-server
+
 skiff @petstore --list
 skiff @mytools echo --message hi   # after --session-start myfs
 

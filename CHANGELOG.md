@@ -11,6 +11,7 @@ All notable changes to this project are documented here.
 - Mid-daemon OAuth refresh for HTTP `--session` (token rotate → reconnect before RPC; clearer auth/child-death errors)
 - MCP `--list-resources` / `--read-resource` / `--list-prompts` / `--get-prompt` work with `--mcp` / `--mcp-stdio` (session no longer required)
 - [ROADMAP.md](ROADMAP.md) — competitive gap analysis vs Python mcp2cli / mcpx / mcpli / mcpc / mcporter; ranked Next backlog
+- `skiff bake import` — import MCP servers from Cursor (`~/.cursor/mcp.json`), Claude, or Codex into bake (`--from`, `--path`, `--name`, `--dry-run`, `--force`)
 
 ### Changed
 
@@ -19,6 +20,7 @@ All notable changes to this project are documented here.
 - `--auth-header` accepts `Bearer env:VAR` / `Bearer:env:VAR` (and `file:`) so documented `Authorization:Bearer:env:…` works while keeping secrets off argv
 - `scripts/bench_vs_python.py` / CF bench use `Authorization:Bearer:env:CF_API_TOKEN` instead of literal tokens
 - Agent skill: expanded “Generating a skill from an API” playbook + exit codes
+- `bake show` leaves `Bearer:env:` / `Bearer:file:` auth values unmasked (same as bare `env:` / `file:`)
 
 ## 0.1.2 — 2026-07-31
 
