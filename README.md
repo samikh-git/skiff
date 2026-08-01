@@ -114,13 +114,45 @@ Cloudflare MCP byte bench (optional):
 CF_API_TOKEN=… MCP2CLI_BENCH_CF=1 cargo test --test cloudflare_bench -- --ignored --nocapture
 ```
 
-Rust vs Python multi-run comparison (dataframe + optional CSV; needs `pandas` and `uvx mcp2cli`):
+Rust vs Python multi-run comparison (dataframe + optional CSV; needs `pandas` and `uvx`):
 
 ```bash
 cargo build --release
 python3 scripts/bench_vs_python.py --runs 10
-# MCP2CLI_RUST_BIN=… MCP2CLI_PYTHON_BIN="uvx mcp2cli" python3 scripts/bench_vs_python.py --csv /tmp/bench.csv
+# MCP2CLI_RUST_BIN=… MCP2CLI_PYTHON_BIN="uvx --with mcp==1.12.0 mcp2cli" \
+#   python3 scripts/bench_vs_python.py --csv /tmp/bench.csv
 ```
+
+### Benchmark results (Cloudflare MCP, 10 warm runs)
+
+Measured 2026-07-31 against upstream Python [`mcp2cli`](https://github.com/knowsuchagency/mcp2cli) via `uvx --with mcp==1.12.0 mcp2cli` (plain `uvx mcp2cli` currently fails streamable HTTP on newer `mcp` SDKs). Isolated `MCP2CLI_CACHE_DIR` per implementation. Wall clock includes process spawn.
+
+| Scenario | Rust warm median | Python warm median | Approx. speedup |
+|----------|-----------------:|-------------------:|----------------:|
+| Docs MCP `--list --json --compact` | 8.2 ms | 575 ms | ~70× |
+| Docs MCP `--list --json` | 12.8 ms | 555 ms | ~43× |
+| Fat catalog `--search workers --json --compact --top 20` | **9.9 ms** | 3224 ms | **~325×** |
+| Fat catalog `--list --json --compact` | 12.8 ms | 1846 ms | ~144× |
+| Fat catalog session `--agent --search workers` (Rust-only) | 12.8 ms | — | — |
+
+Cold first fetch of the fat Cloudflare catalog is ~1–2 s for Rust and ~2–3.5 s for Python (network + full `list_tools`). After that, Rust stays near **10 ms** because warm discovery reads a slim **v4 tools index** (~143 KiB names + overrides; postings rebuilt in memory) or, with `--session`, searches an in-daemon RAM index over Unix IPC. Python’s warm path still pays a large per-invocation cost on this catalog (often seconds), so spawn + cache alone do not explain the gap.
+
+**Index / session notes**
+
+- Non-session disk index omits descriptions and postings by default; `--detail brief` may fall through to the full tools cache.
+- Session daemons hold `CompactIndex` in RAM and answer `list_tools_light` without shipping `inputSchema`s — preferred for fat servers.
+- Full `tools.json` remains ~2.4 MB for schema-heavy calls (`--detail full`, `--describe`, tool `--help`).
+
+**Limitations of this comparison**
+
+- **Not identical stdout:** on fat `--search … --top 20`, Python returned fewer bytes (~719 vs ~1100). Formats and hit sets can differ; do not treat byte counts as a pure efficiency win either way.
+- **Heuristic tokens:** `ceil(bytes/4)`, not tiktoken.
+- **Auth / transport:** both use `--transport streamable` and `Authorization:Bearer …`. Results depend on Cloudflare MCP availability and token scope.
+- **Python pin:** SDK pin is required for a fair streamable run; future upstream fixes may change absolute Python numbers.
+- **Machine noise:** medians over 10 warm runs on one laptop; expect variance across OS/load.
+- **Feature asymmetry:** `--agent`, sessions, spool, native `--toon` are Rust-only in this harness.
+
+**Analysis:** the headline win is **latency on warm discovery**, especially search over thousands of tools — the design goal of the compact index + session RAM path. Token/byte competition remains scenario-dependent: progressive `--detail` / `--top` / `--agent` still matter more for context size than raw CLI speed.
 
 ## Status / limits
 

@@ -56,10 +56,11 @@ Name lists may use **prefix compression**:
 MCP `list_tools` returns **every** tool with full `inputSchema` (multi‑MB on fat APIs). mcp2cli:
 
 1. Caches the full list under `$MCP2CLI_CACHE_DIR`
-2. Also writes a light **`_index.json`** (name + description only)
-3. Warm `--search` / `--detail names|brief` reads the **index**, not full schemas
+2. Writes a slim **v4** `*_tools_index.json` (sorted names + sparse tool-name overrides; postings rebuilt in RAM)
+3. Warm `--search` / `--detail names` reads the **index**, not full schemas
+4. With `--session`, the daemon keeps `CompactIndex` in RAM and serves `list_tools_light` (search in-process)
 
-That cuts CPU and disk I/O; **agent tokens** still depend on stdout (`--top`, compression). True **server-side** search (filter before download) needs MCP protocol/server support we do not assume — the index is the portable stand-in.
+That cuts CPU and disk I/O; **agent tokens** still depend on stdout (`--top`, compression). True **server-side** search needs MCP protocol/server support we do not assume — the index is the portable stand-in.
 
 ## Sessions (Unix)
 
