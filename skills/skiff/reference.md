@@ -81,6 +81,16 @@ skiff bake import --path ./mcp.json --name my-server --force
 
 Maps Cursor/Claude `mcpServers` (JSON) and Codex `[mcp_servers]` (TOML) into bake. HTTP `url`/`serverUrl` → `--mcp`; `command`+`args` → `--mcp-stdio`. Header values like `Bearer ${TOKEN}` become `Bearer:env:TOKEN`.
 
+## Shell completion
+
+```bash
+skiff completion bash|zsh|fish
+# helpers used by scripts:
+skiff __complete bake-names
+skiff __complete bake-names-at
+skiff __complete session-names
+```
+
 ## Exit codes
 
 | Code | Meaning |

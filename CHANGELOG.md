@@ -12,6 +12,7 @@ All notable changes to this project are documented here.
 - MCP `--list-resources` / `--read-resource` / `--list-prompts` / `--get-prompt` work with `--mcp` / `--mcp-stdio` (session no longer required)
 - [ROADMAP.md](ROADMAP.md) — competitive gap analysis vs Python mcp2cli / mcpx / mcpli / mcpc / mcporter; ranked Next backlog
 - `skiff bake import` — import MCP servers from Cursor (`~/.cursor/mcp.json`), Claude, or Codex into bake (`--from`, `--path`, `--name`, `--dry-run`, `--force`)
+- `skiff completion bash|zsh|fish` — shell completion for bake/`@name`, sessions, and common flags (`skiff __complete` helpers)
 
 ### Changed
 

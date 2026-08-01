@@ -16,7 +16,7 @@ Near-term focus: make agent MCP workflows reliable end-to-end (install → warm 
 1. ~~**Skill-from-API playbook**~~ — done in [`skills/skiff/SKILL.md`](skills/skiff/SKILL.md) (2026-08-01)
 2. ~~**Document exit-code contract**~~ — done in README + skill
 3. ~~**Import editor MCP configs**~~ — `skiff bake import` (Cursor/Claude JSON, Codex TOML)
-4. **Shell completion** for bake names + common flags (optionally warm-index tool names)
+4. ~~**Shell completion**~~ — `skiff completion bash|zsh|fish` + `__complete` helpers
 5. **Dogfood real MCPs**; fix whatever early users hit first
 6. **OpenAPI realism** when a real bake target fails (path-level params, form-urlencoded, external `$ref`)
 7. Broader release artifacts (musl / arm Linux) as demand appears
@@ -95,5 +95,6 @@ Landed:
 2. Expanded **skill-from-API** playbook + exit codes in skill/README
 3. Honest competitive notes (Python has sessions; skiff still faster)
 4. **`skiff bake import`** from Cursor / Claude / Codex MCP configs
+5. **`skiff completion`** (bash/zsh/fish) with dynamic bake + session names
 
-**Next PR:** shell completion for bake names + common flags.
+**Next PR:** dogfood real MCPs / OpenAPI realism, or `doctor` stale-binary warning.

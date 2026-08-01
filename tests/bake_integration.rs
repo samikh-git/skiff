@@ -505,3 +505,53 @@ fn bake_import_from_toml_and_name_filter() {
         .stdout(predicate::str::contains("github"))
         .stdout(predicate::str::contains("deepwiki").not());
 }
+
+#[test]
+fn completion_scripts_and_bake_names() {
+    let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let env = IsolatedEnv::new();
+    let stdio = mcp_stdio_cmd();
+
+    env.cmd()
+        .args(["completion", "bash"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("_skiff_complete"))
+        .stdout(predicate::str::contains("__complete"));
+
+    env.cmd()
+        .args(["completion", "zsh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("#compdef skiff"));
+
+    env.cmd()
+        .args(["completion", "fish"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("complete -c skiff"));
+
+    env.cmd()
+        .args(["bake", "create", "comp-demo", "--mcp-stdio", &stdio])
+        .assert()
+        .success();
+
+    env.cmd()
+        .args(["__complete", "bake-names"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("comp-demo"));
+
+    env.cmd()
+        .args(["__complete", "bake-names-at", "@comp"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("@comp-demo"));
+
+    env.cmd()
+        .args(["__complete", "detail"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("names"))
+        .stdout(predicate::str::contains("brief"));
+}

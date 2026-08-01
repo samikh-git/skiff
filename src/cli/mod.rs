@@ -5,6 +5,7 @@
 
 pub mod args;
 pub mod bake;
+pub mod completion;
 pub mod dispatch;
 pub mod doctor;
 pub mod dynamic;

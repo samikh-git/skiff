@@ -12,6 +12,7 @@ use crate::bake::require_baked;
 use crate::cache::cache_key_for;
 use crate::cli::args::GlobalArgs;
 use crate::cli::bake::handle_bake;
+use crate::cli::completion::{handle_complete_helper, handle_completion};
 use crate::cli::doctor::handle_doctor;
 use crate::cli::dynamic::{parse_tool_args, read_stdin_json};
 use crate::cli::list::{
@@ -45,6 +46,12 @@ pub fn dispatch(argv: Vec<OsString>) -> Result<()> {
     if argv.first().and_then(|a| a.to_str()) == Some("doctor") {
         let json = argv.iter().any(|a| a == "--json");
         return handle_doctor(json);
+    }
+    if argv.first().and_then(|a| a.to_str()) == Some("completion") {
+        return handle_completion(&argv[1..]);
+    }
+    if argv.first().and_then(|a| a.to_str()) == Some("__complete") {
+        return handle_complete_helper(&argv[1..]);
     }
     if let Some(first) = argv.first().and_then(|a| a.to_str()) {
         if let Some(name) = first.strip_prefix('@') {
@@ -980,9 +987,10 @@ Usage:
   skiff --graphql <URL> [--list] [command]
   skiff --mcp-stdio <CMD> --session-start <NAME>
   skiff --session <NAME> [--list] [command]
-  skiff bake <create|list|show|remove|update|install> ...
+  skiff bake <create|list|show|remove|update|install|import> ...
   skiff @<name> ...
   skiff doctor [--json]
+  skiff completion <bash|zsh|fish>
 ",
         version = env!("CARGO_PKG_VERSION")
     );

@@ -146,6 +146,14 @@ skiff @myfs --list    # needs session already started if bake has --session
 skiff bake show myfs  # secrets masked
 ```
 
+## Shell completion
+
+```bash
+eval "$(skiff completion bash)"   # or zsh / fish → completions file
+```
+
+Completes `bake` subcommands, `@name`, session names, and flags like `--detail` / `--transport`.
+
 ## Auth
 
 Always `env:` / `file:` — never literal secrets on argv.

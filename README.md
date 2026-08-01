@@ -29,6 +29,21 @@ skiff doctor --json
 
 Binary: `skiff` on PATH after brew/cargo install (or `./target/release/skiff` from this repo).
 
+Shell completion (optional):
+
+```bash
+# bash
+eval "$(skiff completion bash)"
+
+# zsh — write to fpath, or:
+eval "$(skiff completion zsh)"
+
+# fish
+skiff completion fish > ~/.config/fish/completions/skiff.fish
+```
+
+Completes `bake` subcommands, `@name` / bake names, session names, and common flags (`--detail`, `--transport`, …).
+
 ## Quick start
 
 One source flag is required (`--spec` | `--mcp` | `--mcp-stdio` | `--graphql`).
