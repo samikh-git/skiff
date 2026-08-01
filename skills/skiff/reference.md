@@ -50,6 +50,27 @@
 | `--session-idle-secs N` | Default 1800; `0` = never |
 | `--session-clean-env` | Minimal stdio env |
 
+## Resources / prompts (MCP)
+
+Work with `--mcp` / `--mcp-stdio` or `--session` (session not required):
+
+| Flag | Notes |
+|------|-------|
+| `--list-resources` | List MCP resources |
+| `--list-resource-templates` | List templates |
+| `--read-resource URI` | Read one resource |
+| `--list-prompts` | List prompts |
+| `--get-prompt NAME` | Get prompt; add `--prompt-arg KEY=VALUE` |
+
+## Doctor
+
+```bash
+skiff doctor
+skiff doctor --json
+```
+
+Prints binary version/PATH, cache/config dirs, spool/oauth/session/bake summary, and install hints.
+
 ## Paths
 
 | Env / path | Default |

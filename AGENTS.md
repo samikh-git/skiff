@@ -13,11 +13,12 @@ Guidance for coding agents and humans extending this repo. Prefer this file plus
 
 | Path | Role |
 |------|------|
-| `src/cli/` | Args, dispatch, list/search output |
+| `src/cli/` | Args, dispatch, list/search output, `doctor` |
 | `src/tools_index.rs` | Compact catalog index (v4 disk; postings in RAM) |
 | `src/session/` | Unix session daemon + NDJSON IPC |
 | `src/mcp/` | HTTP / SSE / stdio transports |
 | `skills/skiff/` | Agent skill (`npx skills add samikh-git/skiff`); `.cursor/skills/skiff` symlinks here |
+| `examples/agent_workflow.sh` | Local bake → session → search → describe → call demo |
 | `scripts/bench_vs_python.py` | Multi-run Rust vs upstream Python dataframe bench |
 | `tests/cloudflare_bench.rs` | Env-gated CF smoke bench |
 | `tests/token_efficiency.rs` | Local fixture token/size checks |
@@ -59,6 +60,7 @@ When changing discovery/index/session paths, re-run at least `tools_index` unit 
 
 - User-facing: `README.md` (including bench table / limitations when numbers change materially).
 - Agent skill: `skills/skiff/` (index description should match v4 + session RAM behavior).
+- `CHANGELOG.md` / `ROADMAP.md`: notable user-facing changes and near-term focus.
 - This file: architecture decisions agents must not casually reverse.
 
 ## Git / PR hygiene

@@ -2,6 +2,8 @@
 
 Turn an MCP server, OpenAPI spec, or GraphQL endpoint into a CLI at runtime, with no codegen. Aimed at agent workflows: progressive discovery, a warm catalog index, sessions, and spool for large payloads.
 
+**Why a CLI instead of in-process MCP?** Agents that shell out need progressive discovery (`--detail names` → `--describe` → call), warm search over thousands of tools (~10 ms after first fetch), and spool pointers for huge payloads — not a full schema dump into context every turn.
+
 Inspired by [knowsuchagency/mcp2cli](https://github.com/knowsuchagency/mcp2cli) (Python prior art). skiff is a separate Rust project, focused on warm-path latency and lighter agent defaults.
 
 ## Install
@@ -22,9 +24,12 @@ cargo install --git https://github.com/samikh-git/skiff --locked
 npx skills add samikh-git/skiff
 # or: npx skills add samikh-git/skiff -g          # global
 #     npx skills add samikh-git/skiff -s skiff -y # non-interactive
+
+skiff doctor          # PATH, cache/config, sessions, bake
+skiff doctor --json
 ```
 
-Binary: `skiff` (or `./target/release/skiff`).
+Binary: `skiff` on PATH after brew/cargo install (or `./target/release/skiff` from this repo).
 
 ## Quick start
 
@@ -47,6 +52,32 @@ skiff --mcp http://127.0.0.1:8000/sse --transport sse echo --message hi
 # GraphQL
 skiff --graphql http://127.0.0.1:4000 --list
 skiff --graphql http://127.0.0.1:4000 --fields "id name" user --id 1
+```
+
+### Canonical agent workflow
+
+Local demo (no API token) — bake → session → search → describe → call:
+
+```bash
+cargo build --release
+./examples/agent_workflow.sh
+```
+
+Against Cloudflare Docs MCP (needs `CF_API_TOKEN`):
+
+```bash
+skiff bake create cfdocs \
+  --mcp https://docs.mcp.cloudflare.com/mcp \
+  --auth-header "Authorization:Bearer:env:CF_API_TOKEN" \
+  --session cfdocs --force
+skiff --mcp https://docs.mcp.cloudflare.com/mcp \
+  --auth-header "Authorization:Bearer:env:CF_API_TOKEN" \
+  --session-start cfdocs
+skiff @cfdocs --agent --search workers
+skiff @cfdocs --describe search_cloudflare_documentation
+skiff @cfdocs --agent search_cloudflare_documentation --query "workers kv"
+# if stdout has "spooled": true → rg the path (do not cat the whole file)
+skiff --session-stop cfdocs
 ```
 
 ### Sessions (Unix only)
@@ -74,7 +105,7 @@ Not available on Windows.
 
 ### OAuth
 
-HTTP sources only (not `--mcp-stdio`). Prefer streamable HTTP; SSE gets a Bearer at connect only (no mid-stream refresh).
+HTTP sources only (not `--mcp-stdio`). Prefer streamable HTTP; SSE gets a Bearer at connect only (no mid-stream refresh). HTTP **sessions** with `--oauth` re-read the credential store before each RPC and reconnect when the access token rotates.
 
 ```bash
 skiff --mcp https://mcp.example.com/mcp --oauth --list
@@ -174,9 +205,9 @@ The clearest gap is warm discovery latency, especially search over thousands of 
 
 ## Status / limits
 
-Shipped: OpenAPI, MCP stdio/HTTP (streamable + SSE), OAuth, GraphQL, sessions (Unix), bake/`@name`, list/search/output flags, native `--toon`, `--envelope`, spool overflow, `--agent` defaults.
+Shipped: OpenAPI, MCP stdio/HTTP (streamable + SSE), OAuth (including mid-daemon refresh for HTTP sessions), GraphQL, sessions (Unix), bake/`@name`, resources/prompts without requiring a session, list/search/output flags, native `--toon`, `--envelope`, spool overflow, `--agent` defaults, `skiff doctor`.
 
-Not done yet: no Windows sessions; no mid-daemon OAuth refresh (restart the session if the token TTL is shorter than idle).
+Not done yet: no Windows sessions. See [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

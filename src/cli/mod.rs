@@ -7,6 +7,7 @@
 pub mod args;
 pub mod bake;
 pub mod dispatch;
+pub mod doctor;
 pub mod dynamic;
 pub mod list;
 

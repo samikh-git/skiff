@@ -10,7 +10,11 @@ mod sse;
 mod stdio;
 mod transport;
 
-pub use common::{call_tool_on, list_tools_on, tools_to_commands, McpClient};
+pub use common::{
+    call_tool_on, get_prompt_on, list_prompts_on, list_resource_templates_on, list_resources_on,
+    list_tools_on, read_resource_on, run_mcp_extras, tools_to_commands, wants_mcp_extras,
+    McpClient,
+};
 pub use http::connect_streamable;
 pub use sse::connect_sse;
 pub use stdio::{call_tool_stdio, connect_stdio, connect_stdio_with, fetch_mcp_tools_stdio};

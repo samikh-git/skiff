@@ -3,6 +3,9 @@
 //! Accepts concurrent IPC clients; MCP RPCs are serialized with a mutex.
 //! Tool schemas are cached in-memory (`list_tools` + `refresh: true` busts).
 //! Idle / SIGTERM exits unlink meta + sock.
+//!
+//! HTTP sessions with [`DaemonConfig::oauth`] refresh the Bearer token from the
+//! credential store before each RPC and reconnect when it rotates.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -10,15 +13,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use serde_json::{json, Value};
+use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::sync::Mutex;
 
 use crate::error::{Error, Result};
 use crate::mcp::{
-    call_tool_on, connect_http, connect_stdio_with, list_tools_on, McpClient, TransportMode,
+    call_tool_on, connect_http, connect_stdio_with, get_prompt_on, list_prompts_on,
+    list_resource_templates_on, list_resources_on, list_tools_on, read_resource_on, McpClient,
+    TransportMode,
 };
+use crate::oauth::{authorize, OAuthReady};
 use crate::session::paths::{
     chmod_0600, session_meta_path, session_sock_path, unlink_session_files, write_meta, SessionMeta,
 };
@@ -29,7 +35,12 @@ use crate::tools_index::{build_compact_index, search_compact, CompactIndex};
 
 struct DaemonState {
     name: String,
+    config: DaemonConfig,
     client: Option<McpClient>,
+    /// Live OAuth client for mid-daemon refresh (HTTP + oauth only).
+    oauth: Option<OAuthReady>,
+    /// Bearer token currently injected into the HTTP connection.
+    bearer_token: Option<String>,
     tools_cache: Option<Vec<Value>>,
     /// In-memory names/postings index; rebuilt with `tools_cache`, dies with daemon.
     tools_index: Option<CompactIndex>,
@@ -61,7 +72,8 @@ async fn daemon_main(config: DaemonConfig) -> Result<()> {
     let sock_path = session_sock_path(&name);
     let _ = fs::remove_file(&sock_path);
 
-    let client = connect_mcp(&config).await?;
+    let idle_secs = config.idle_secs;
+    let (client, oauth, bearer_token) = connect_mcp_fresh(&config).await?;
     let created_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs_f64())
@@ -77,7 +89,7 @@ async fn daemon_main(config: DaemonConfig) -> Result<()> {
                 "http".into()
             },
             created_at,
-            idle_secs: config.idle_secs,
+            idle_secs,
             last_activity_at: created_at,
         },
     )?;
@@ -106,14 +118,17 @@ async fn daemon_main(config: DaemonConfig) -> Result<()> {
 
     let state = Arc::new(Mutex::new(DaemonState {
         name: name.clone(),
+        config,
         client: Some(client),
+        oauth,
+        bearer_token,
         tools_cache: None,
         tools_index: None,
         last_activity: Instant::now(),
     }));
 
-    let idle = Duration::from_secs(config.idle_secs);
-    let idle_enabled = config.idle_secs > 0;
+    let idle = Duration::from_secs(idle_secs);
+    let idle_enabled = idle_secs > 0;
 
     loop {
         tokio::select! {
@@ -195,13 +210,147 @@ async fn wait_sigterm() {
     std::future::pending::<()>().await
 }
 
-async fn connect_mcp(config: &DaemonConfig) -> Result<McpClient> {
+async fn connect_mcp_fresh(
+    config: &DaemonConfig,
+) -> Result<(McpClient, Option<OAuthReady>, Option<String>)> {
     if config.is_stdio {
-        connect_stdio_with(&config.source, &config.env_vars, config.clean_env).await
-    } else {
-        let transport = TransportMode::parse(&config.transport)?;
-        connect_http(&config.source, &config.auth_headers, transport, None).await
+        let client = connect_stdio_with(&config.source, &config.env_vars, config.clean_env).await?;
+        return Ok((client, None, None));
     }
+
+    let transport = TransportMode::parse(&config.transport)?;
+    let mut headers = config.auth_headers.clone();
+    let mut oauth_ready = None;
+    let mut bearer = None;
+
+    if let Some(oauth_cfg) = &config.oauth {
+        let opts = oauth_cfg.to_options()?;
+        let ready = authorize(&config.source, &opts).await.map_err(|e| {
+            Error::runtime(format!(
+                "OAuth for session failed: {e}. Fix credentials then --session-stop and --session-start again"
+            ))
+        })?;
+        let token = ready.access_token().await.map_err(|e| {
+            Error::runtime(format!(
+                "OAuth token unavailable for session: {e}. Re-run with --oauth or check cached credentials under $SKIFF_CACHE_DIR/oauth/"
+            ))
+        })?;
+        headers.retain(|(k, _)| !k.eq_ignore_ascii_case("authorization"));
+        headers.push(("Authorization".into(), format!("Bearer {token}")));
+        bearer = Some(token);
+        oauth_ready = Some(ready);
+    }
+
+    let client = connect_http(&config.source, &headers, transport, None)
+        .await
+        .map_err(map_connect_err)?;
+    Ok((client, oauth_ready, bearer))
+}
+
+fn map_connect_err(e: Error) -> Error {
+    let msg = e.to_string();
+    if looks_like_auth_error(&msg) {
+        Error::runtime(format!(
+            "{msg}. Auth likely expired — for OAuth sessions the daemon refreshes on the next RPC; otherwise --session-stop then --session-start with fresh credentials"
+        ))
+    } else {
+        e
+    }
+}
+
+fn looks_like_auth_error(msg: &str) -> bool {
+    let lower = msg.to_ascii_lowercase();
+    lower.contains("401")
+        || lower.contains("403")
+        || lower.contains("unauthorized")
+        || lower.contains("forbidden")
+        || lower.contains("invalid_token")
+        || lower.contains("expired")
+}
+
+/// Refresh OAuth token from store and reconnect if the Bearer changed.
+async fn ensure_fresh_auth(st: &mut DaemonState) -> Result<()> {
+    if st.config.is_stdio || st.config.oauth.is_none() {
+        return Ok(());
+    }
+
+    if st.oauth.is_none() {
+        let (client, oauth, bearer) = connect_mcp_fresh(&st.config).await?;
+        if let Some(old) = st.client.take() {
+            let _ = old.cancel().await;
+        }
+        st.client = Some(client);
+        st.oauth = oauth;
+        st.bearer_token = bearer;
+        st.tools_cache = None;
+        st.tools_index = None;
+        return Ok(());
+    }
+
+    let token = {
+        let oauth = st.oauth.as_ref().unwrap();
+        match oauth.access_token().await {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::debug!("OAuth access_token failed ({e}); re-authorizing");
+                let (client, oauth, bearer) = connect_mcp_fresh(&st.config).await?;
+                if let Some(old) = st.client.take() {
+                    let _ = old.cancel().await;
+                }
+                st.client = Some(client);
+                st.oauth = oauth;
+                st.bearer_token = bearer;
+                st.tools_cache = None;
+                st.tools_index = None;
+                return Ok(());
+            }
+        }
+    };
+
+    if st.bearer_token.as_deref() == Some(token.as_str()) {
+        return Ok(());
+    }
+
+    tracing::info!("session OAuth token rotated; reconnecting MCP client");
+    let transport = TransportMode::parse(&st.config.transport)?;
+    let mut headers = st.config.auth_headers.clone();
+    headers.retain(|(k, _)| !k.eq_ignore_ascii_case("authorization"));
+    headers.push(("Authorization".into(), format!("Bearer {token}")));
+
+    let client = connect_http(&st.config.source, &headers, transport, None)
+        .await
+        .map_err(|e| {
+            Error::runtime(format!(
+                "MCP reconnect after OAuth refresh failed: {e}. Run --session-stop {} then --session-start again",
+                st.name
+            ))
+        })?;
+    if let Some(old) = st.client.take() {
+        let _ = old.cancel().await;
+    }
+    st.client = Some(client);
+    st.bearer_token = Some(token);
+    Ok(())
+}
+
+fn map_rpc_err(name: &str, e: Error) -> Error {
+    let msg = e.to_string();
+    if looks_like_auth_error(&msg) {
+        return Error::runtime(format!(
+            "{msg}. Auth failed — OAuth sessions refresh automatically; if this persists, --session-stop {name} then --session-start with fresh credentials"
+        ));
+    }
+    if msg.contains("closed")
+        || msg.contains("broken pipe")
+        || msg.contains("Connection reset")
+        || msg.contains("os error 32")
+        || msg.contains("transport")
+    {
+        return Error::runtime(format!(
+            "{msg}. MCP child or HTTP session likely died — run --session-stop {name} then --session-start {name} again"
+        ));
+    }
+    e
 }
 
 async fn handle_client(
@@ -247,10 +396,37 @@ async fn dispatch(state: &Arc<Mutex<DaemonState>>, req: &SessionRequest) -> Resu
         meta.last_activity_at = now;
         let _ = write_meta(&st.name, &meta);
     }
-    let client = st
-        .client
-        .as_ref()
-        .ok_or_else(|| Error::runtime("session MCP client is shut down"))?;
+
+    ensure_fresh_auth(&mut st).await?;
+    let session_name = st.name.clone();
+
+    let result = dispatch_locked(&mut st, method, req).await;
+    match result {
+        Ok(v) => Ok(v),
+        Err(e) if looks_like_auth_error(&e.to_string()) && st.config.oauth.is_some() => {
+            tracing::debug!("RPC auth error; forcing OAuth reconnect: {e}");
+            st.bearer_token = None;
+            st.oauth = None;
+            ensure_fresh_auth(&mut st).await?;
+            dispatch_locked(&mut st, method, req)
+                .await
+                .map_err(|err| map_rpc_err(&session_name, err))
+        }
+        Err(e) => Err(map_rpc_err(&session_name, e)),
+    }
+}
+
+async fn dispatch_locked(
+    st: &mut DaemonState,
+    method: SessionMethod,
+    req: &SessionRequest,
+) -> Result<Value> {
+    let name = st.name.clone();
+    let client = st.client.as_ref().ok_or_else(|| {
+        Error::runtime(format!(
+            "session MCP client is shut down. Run --session-stop {name} then --session-start {name}"
+        ))
+    })?;
 
     match method {
         SessionMethod::ListTools => {
@@ -265,7 +441,7 @@ async fn dispatch(state: &Arc<Mutex<DaemonState>>, req: &SessionRequest) -> Resu
                 }
             }
             let tools = list_tools_on(client).await?;
-            cache_tools(&mut st, tools.clone());
+            cache_tools(st, tools.clone());
             Ok(Value::Array(tools))
         }
         SessionMethod::ListToolsLight => {
@@ -281,7 +457,7 @@ async fn dispatch(state: &Arc<Mutex<DaemonState>>, req: &SessionRequest) -> Resu
                 .filter(|s| !s.is_empty());
             if refresh || st.tools_cache.is_none() || st.tools_index.is_none() {
                 let tools = list_tools_on(client).await?;
-                cache_tools(&mut st, tools);
+                cache_tools(st, tools);
             }
             let index = st
                 .tools_index
@@ -295,7 +471,7 @@ async fn dispatch(state: &Arc<Mutex<DaemonState>>, req: &SessionRequest) -> Resu
             Ok(index.to_light_tools_json(&entries))
         }
         SessionMethod::GetTool => {
-            let name = req
+            let tool_name = req
                 .params
                 .get("name")
                 .and_then(|v| v.as_str())
@@ -307,18 +483,17 @@ async fn dispatch(state: &Arc<Mutex<DaemonState>>, req: &SessionRequest) -> Resu
                 .unwrap_or(false);
             if refresh || st.tools_cache.is_none() {
                 let tools = list_tools_on(client).await?;
-                cache_tools(&mut st, tools);
+                cache_tools(st, tools);
             }
             let tools = st.tools_cache.as_ref().unwrap();
-            // Match raw MCP name or kebab CLI subcommand (e.g. add_numbers / add-numbers).
             let found = tools.iter().find(|t| {
                 let mcp = t.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                mcp == name || crate::coerce::to_kebab(mcp) == name
+                mcp == tool_name || crate::coerce::to_kebab(mcp) == tool_name
             });
             Ok(found.cloned().unwrap_or(Value::Null))
         }
         SessionMethod::CallTool => {
-            let name = req
+            let tool_name = req
                 .params
                 .get("name")
                 .and_then(|v| v.as_str())
@@ -334,67 +509,32 @@ async fn dispatch(state: &Arc<Mutex<DaemonState>>, req: &SessionRequest) -> Resu
                 .get("full_envelope")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            call_tool_on(client, name, arguments, full).await
+            call_tool_on(client, tool_name, arguments, full).await
         }
-        SessionMethod::ListResources => {
-            let resources = client
-                .list_all_resources()
-                .await
-                .map_err(|e| Error::runtime(format!("list_resources: {e}")))?;
-            let arr: Vec<Value> = resources
-                .into_iter()
-                .map(|r| {
-                    json!({
-                        "name": r.name,
-                        "uri": r.uri,
-                        "description": r.description.unwrap_or_default(),
-                        "mimeType": r.mime_type.unwrap_or_default(),
-                    })
-                })
-                .collect();
-            Ok(Value::Array(arr))
-        }
+        SessionMethod::ListResources => list_resources_on(client).await,
         SessionMethod::ReadResource => {
             let uri = req
                 .params
                 .get("uri")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| Error::usage("read_resource requires params.uri"))?;
-            let result = client
-                .read_resource(rmcp::model::ReadResourceRequestParams::new(uri))
-                .await
-                .map_err(|e| Error::runtime(format!("read_resource: {e}")))?;
-            Ok(serde_json::to_value(result).unwrap_or(Value::Null))
+            read_resource_on(client, uri).await
         }
-        SessionMethod::ListResourceTemplates => {
-            let templates = client
-                .list_all_resource_templates()
-                .await
-                .map_err(|e| Error::runtime(format!("list_resource_templates: {e}")))?;
-            Ok(serde_json::to_value(templates).unwrap_or(Value::Null))
-        }
-        SessionMethod::ListPrompts => {
-            let prompts = client
-                .list_all_prompts()
-                .await
-                .map_err(|e| Error::runtime(format!("list_prompts: {e}")))?;
-            Ok(serde_json::to_value(prompts).unwrap_or(Value::Null))
-        }
+        SessionMethod::ListResourceTemplates => list_resource_templates_on(client).await,
+        SessionMethod::ListPrompts => list_prompts_on(client).await,
         SessionMethod::GetPrompt => {
-            let name = req
+            let prompt_name = req
                 .params
                 .get("name")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| Error::usage("get_prompt requires params.name"))?;
-            let mut params = rmcp::model::GetPromptRequestParams::new(name);
-            if let Some(args) = req.params.get("arguments").and_then(|v| v.as_object()) {
-                params = params.with_arguments(args.clone());
-            }
-            let result = client
-                .get_prompt(params)
-                .await
-                .map_err(|e| Error::runtime(format!("get_prompt: {e}")))?;
-            Ok(serde_json::to_value(result).unwrap_or(Value::Null))
+            let args = req
+                .params
+                .get("arguments")
+                .and_then(|v| v.as_object())
+                .cloned()
+                .unwrap_or_default();
+            get_prompt_on(client, prompt_name, args).await
         }
     }
 }

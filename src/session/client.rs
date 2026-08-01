@@ -24,7 +24,7 @@ pub fn session_request(name: &str, method: &str, params: Value) -> Result<Value>
 
     let mut stream = UnixStream::connect(&sock).map_err(|e| {
         Error::runtime(format!(
-            "cannot connect to session {name:?}: {e}. Start with --session-start {name}"
+            "cannot connect to session {name:?}: {e}. MCP child may have died — run --session-stop {name} then --session-start {name}"
         ))
     })?;
     stream
@@ -43,17 +43,25 @@ pub fn session_request(name: &str, method: &str, params: Value) -> Result<Value>
     line.push('\n');
     stream
         .write_all(line.as_bytes())
-        .map_err(|e| Error::runtime(format!("session write failed: {e}")))?;
+        .map_err(|e| {
+            Error::runtime(format!(
+                "session write failed: {e}. MCP child likely died — run --session-stop {name} then --session-start {name}"
+            ))
+        })?;
     let _ = stream.shutdown(std::net::Shutdown::Write);
 
     let mut buf = String::new();
     stream
         .read_to_string(&mut buf)
-        .map_err(|e| Error::runtime(format!("session read failed: {e}")))?;
+        .map_err(|e| {
+            Error::runtime(format!(
+                "session read failed: {e}. MCP child likely died — run --session-stop {name} then --session-start {name}"
+            ))
+        })?;
     let line = buf.lines().next().unwrap_or("").trim();
     if line.is_empty() {
         return Err(Error::runtime(format!(
-            "session {name:?} closed without a response"
+            "session {name:?} closed without a response. MCP child likely died — run --session-stop {name} then --session-start {name}"
         )));
     }
     let resp: SessionResponse = serde_json::from_str(line)

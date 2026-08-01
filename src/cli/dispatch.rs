@@ -12,6 +12,7 @@ use crate::bake::require_baked;
 use crate::cache::cache_key_for;
 use crate::cli::args::GlobalArgs;
 use crate::cli::bake::handle_bake;
+use crate::cli::doctor::handle_doctor;
 use crate::cli::dynamic::{parse_tool_args, read_stdin_json};
 use crate::cli::list::{
     apply_list_options, describe_tool, filter_by_search, list_commands, maybe_tool_help,
@@ -22,8 +23,8 @@ use crate::error::{Error, Result};
 use crate::filter::filter_commands;
 use crate::graphql::{execute_graphql, extract_graphql_commands, load_graphql_schema};
 use crate::mcp::{
-    call_tool_http, call_tool_stdio, fetch_mcp_tools_http, fetch_mcp_tools_stdio,
-    tools_to_commands, TransportMode,
+    call_tool_http, call_tool_stdio, connect_http, connect_stdio_with, fetch_mcp_tools_http,
+    fetch_mcp_tools_stdio, run_mcp_extras, tools_to_commands, wants_mcp_extras, TransportMode,
 };
 use crate::model::{BakeConfig, ListDetail};
 use crate::oauth::{
@@ -40,6 +41,10 @@ use crate::usage::{record_usage, source_hash_for};
 pub fn dispatch(argv: Vec<OsString>) -> Result<()> {
     if argv.first().and_then(|a| a.to_str()) == Some("bake") {
         return handle_bake(&argv[1..]);
+    }
+    if argv.first().and_then(|a| a.to_str()) == Some("doctor") {
+        let json = argv.iter().any(|a| a == "--json");
+        return handle_doctor(json);
     }
     if let Some(first) = argv.first().and_then(|a| a.to_str()) {
         if let Some(name) = first.strip_prefix('@') {
@@ -447,6 +452,14 @@ fn dispatch_mcp_http(
     let oauth: Option<OAuthReady> = rt.block_on(setup_from_args(pre))?;
     let oauth_ref = oauth.as_ref();
 
+    if wants_mcp_extras(pre) {
+        let client = rt.block_on(connect_http(url, &auth, transport, oauth_ref))?;
+        let data = rt.block_on(run_mcp_extras(&client, pre))?;
+        let _ = rt.block_on(client.cancel());
+        output_result(data, &pre.output_options())?;
+        return Ok(());
+    }
+
     let list_opts = ListOptions::from_global(pre, ListStyle::Mcp);
     let tools_key = format!("{cache_key}_tools");
     let detail = pre.list_detail();
@@ -560,6 +573,14 @@ fn dispatch_mcp_stdio(
         .enable_all()
         .build()
         .map_err(|e| Error::runtime(e.to_string()))?;
+
+    if wants_mcp_extras(pre) {
+        let client = rt.block_on(connect_stdio_with(command_str, &env_vars, false))?;
+        let data = rt.block_on(run_mcp_extras(&client, pre))?;
+        let _ = rt.block_on(client.cancel());
+        output_result(data, &pre.output_options())?;
+        return Ok(());
+    }
 
     let list_opts = ListOptions::from_global(pre, ListStyle::Mcp);
     let tools_key = format!("{cache_key}_tools");
@@ -690,15 +711,28 @@ fn dispatch_session_start(pre: &GlobalArgs, name: &str) -> Result<()> {
     };
 
     let mut auth = pre.parse_auth_headers()?;
+    let mut oauth_cfg = None;
     if !is_stdio && oauth_wanted(pre) {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .map_err(|e| Error::runtime(e.to_string()))?;
-        if let Some(o) = rt.block_on(setup_from_args(pre))? {
-            let token = rt.block_on(o.access_token())?;
-            auth.retain(|(k, _)| !k.eq_ignore_ascii_case("authorization"));
-            auth.push(("Authorization".into(), format!("Bearer {token}")));
+        // Resolve options once so the daemon can refresh mid-lifetime.
+        if let Some(opts) = crate::oauth::options_from_args(pre)? {
+            oauth_cfg = Some(crate::session::DaemonOAuthConfig {
+                client_id: opts.client_id.clone(),
+                client_secret: opts.client_secret.clone(),
+                client_name: opts.client_name.clone(),
+                scope: opts.scope.clone(),
+                redirect_uri: opts.redirect_uri.clone(),
+                flow: opts.flow.as_str().to_string(),
+            });
+            // Prime the credential store / token before spawn.
+            if let Some(o) = rt.block_on(setup_from_args(pre))? {
+                let token = rt.block_on(o.access_token())?;
+                auth.retain(|(k, _)| !k.eq_ignore_ascii_case("authorization"));
+                auth.push(("Authorization".into(), format!("Bearer {token}")));
+            }
         }
     }
 
@@ -712,6 +746,7 @@ fn dispatch_session_start(pre: &GlobalArgs, name: &str) -> Result<()> {
         transport: pre.transport.clone(),
         clean_env: pre.session_clean_env,
         idle_secs,
+        oauth: oauth_cfg,
     };
     crate::session::session_start(config)
 }
@@ -946,6 +981,7 @@ Usage:
   skiff --session <NAME> [--list] [command]
   skiff bake <create|list|show|remove|update|install> ...
   skiff @<name> ...
+  skiff doctor [--json]
 ",
         version = env!("CARGO_PKG_VERSION")
     );

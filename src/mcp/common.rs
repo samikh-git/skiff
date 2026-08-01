@@ -174,6 +174,106 @@ pub async fn call_tool_on(
     format_tool_result(&result, full_envelope)
 }
 
+pub async fn list_resources_on(client: &McpClient) -> Result<Value> {
+    let resources = client
+        .list_all_resources()
+        .await
+        .map_err(|e| Error::runtime(format!("list_resources: {e}")))?;
+    let arr: Vec<Value> = resources
+        .into_iter()
+        .map(|r| {
+            json!({
+                "name": r.name,
+                "uri": r.uri,
+                "description": r.description.unwrap_or_default(),
+                "mimeType": r.mime_type.unwrap_or_default(),
+            })
+        })
+        .collect();
+    Ok(Value::Array(arr))
+}
+
+pub async fn list_resource_templates_on(client: &McpClient) -> Result<Value> {
+    let templates = client
+        .list_all_resource_templates()
+        .await
+        .map_err(|e| Error::runtime(format!("list_resource_templates: {e}")))?;
+    Ok(serde_json::to_value(templates).unwrap_or(Value::Null))
+}
+
+pub async fn read_resource_on(client: &McpClient, uri: &str) -> Result<Value> {
+    let result = client
+        .read_resource(rmcp::model::ReadResourceRequestParams::new(uri))
+        .await
+        .map_err(|e| Error::runtime(format!("read_resource: {e}")))?;
+    Ok(serde_json::to_value(result).unwrap_or(Value::Null))
+}
+
+pub async fn list_prompts_on(client: &McpClient) -> Result<Value> {
+    let prompts = client
+        .list_all_prompts()
+        .await
+        .map_err(|e| Error::runtime(format!("list_prompts: {e}")))?;
+    Ok(serde_json::to_value(prompts).unwrap_or(Value::Null))
+}
+
+pub async fn get_prompt_on(
+    client: &McpClient,
+    name: &str,
+    arguments: Map<String, Value>,
+) -> Result<Value> {
+    let mut params = rmcp::model::GetPromptRequestParams::new(name);
+    if !arguments.is_empty() {
+        params = params.with_arguments(arguments);
+    }
+    let result = client
+        .get_prompt(params)
+        .await
+        .map_err(|e| Error::runtime(format!("get_prompt: {e}")))?;
+    Ok(serde_json::to_value(result).unwrap_or(Value::Null))
+}
+
+/// True when any MCP resource/prompt discovery flag is set.
+pub fn wants_mcp_extras(pre: &crate::cli::args::GlobalArgs) -> bool {
+    pre.list_resources
+        || pre.list_resource_templates
+        || pre.read_resource.is_some()
+        || pre.list_prompts
+        || pre.get_prompt.is_some()
+}
+
+/// Run exactly one resource/prompt operation against a connected client.
+pub async fn run_mcp_extras(
+    client: &McpClient,
+    pre: &crate::cli::args::GlobalArgs,
+) -> Result<Value> {
+    if pre.list_resources {
+        return list_resources_on(client).await;
+    }
+    if pre.list_resource_templates {
+        return list_resource_templates_on(client).await;
+    }
+    if let Some(uri) = &pre.read_resource {
+        return read_resource_on(client, uri).await;
+    }
+    if pre.list_prompts {
+        return list_prompts_on(client).await;
+    }
+    if let Some(pname) = &pre.get_prompt {
+        let mut args = Map::new();
+        for item in &pre.prompt_arg {
+            let Some((k, v)) = item.split_once('=') else {
+                return Err(Error::usage(format!(
+                    "invalid --prompt-arg {item:?}; expected KEY=VALUE"
+                )));
+            };
+            args.insert(k.to_string(), Value::String(v.to_string()));
+        }
+        return get_prompt_on(client, pname, args).await;
+    }
+    Err(Error::usage("no MCP resource/prompt operation requested"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

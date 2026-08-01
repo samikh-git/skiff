@@ -197,7 +197,7 @@ pub struct GlobalArgs {
     #[arg(long = "session-clean-env")]
     pub session_clean_env: bool,
 
-    /// List MCP resources (via --session today)
+    /// List MCP resources
     #[arg(long = "list-resources")]
     pub list_resources: bool,
 

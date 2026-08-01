@@ -30,7 +30,8 @@ pub use paths::{
 pub use protocol::{SessionMethod, SessionRequest, SessionResponse};
 #[cfg(unix)]
 pub use spawn::{
-    resolve_idle_secs, session_list, session_start, session_stop, DaemonConfig, DEFAULT_IDLE_SECS,
+    resolve_idle_secs, session_list, session_start, session_stop, DaemonConfig, DaemonOAuthConfig,
+    DEFAULT_IDLE_SECS,
 };
 
 /// Non-Unix platforms: sessions are unsupported.

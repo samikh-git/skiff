@@ -22,6 +22,41 @@ use crate::session::paths::{
 
 pub const DEFAULT_IDLE_SECS: u64 = 1800;
 
+/// Serializable OAuth options for mid-daemon token refresh (HTTP sessions).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaemonOAuthConfig {
+    pub client_id: Option<String>,
+    pub client_secret: Option<String>,
+    #[serde(default = "default_oauth_client_name")]
+    pub client_name: String,
+    pub scope: Option<String>,
+    pub redirect_uri: Option<String>,
+    #[serde(default = "default_oauth_flow")]
+    pub flow: String,
+}
+
+fn default_oauth_client_name() -> String {
+    "skiff".into()
+}
+
+fn default_oauth_flow() -> String {
+    "auto".into()
+}
+
+impl DaemonOAuthConfig {
+    pub fn to_options(&self) -> crate::error::Result<crate::oauth::OAuthOptions> {
+        let flow = crate::oauth::parse_oauth_flow(&self.flow)?;
+        Ok(crate::oauth::OAuthOptions {
+            client_id: self.client_id.clone(),
+            client_secret: self.client_secret.clone(),
+            client_name: self.client_name.clone(),
+            scope: self.scope.clone(),
+            redirect_uri: self.redirect_uri.clone(),
+            flow,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DaemonConfig {
     pub name: String,
@@ -34,6 +69,10 @@ pub struct DaemonConfig {
     pub clean_env: bool,
     #[serde(default = "default_idle")]
     pub idle_secs: u64,
+    /// When set, the daemon re-authorizes from the credential store before RPC
+    /// and reconnects if the Bearer token rotates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth: Option<DaemonOAuthConfig>,
 }
 
 fn default_idle() -> u64 {

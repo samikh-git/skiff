@@ -236,3 +236,61 @@ fn mcp_stdio_search_and_env_not_shadowed() {
     let data: Value = serde_json::from_slice(&out).unwrap();
     assert_eq!(data["env"], "production");
 }
+
+#[test]
+fn doctor_reports_version() {
+    skiff()
+        .args(["doctor"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("skiff doctor"))
+        .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")));
+
+    let out = skiff()
+        .args(["doctor", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let data: Value = serde_json::from_slice(&out).unwrap();
+    assert_eq!(data["version"], env!("CARGO_PKG_VERSION"));
+    assert!(data["cache_dir"].as_str().is_some());
+}
+
+#[test]
+fn mcp_stdio_resources_and_prompts_without_session() {
+    let _g = FIXTURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let server = fixtures_dir().join("mcp_test_server.py");
+    let stdio_cmd = format!("{} {}", python(), server.display());
+
+    let resources = skiff()
+        .args(["--mcp-stdio", &stdio_cmd, "--list-resources", "--json"])
+        .timeout(Duration::from_secs(30))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let data: Value = serde_json::from_slice(&resources).unwrap();
+    assert!(data
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|d| d["name"] == "Test Document"));
+
+    let prompts = skiff()
+        .args(["--mcp-stdio", &stdio_cmd, "--list-prompts", "--json"])
+        .timeout(Duration::from_secs(30))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let data: Value = serde_json::from_slice(&prompts).unwrap();
+    assert!(data
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|d| d["name"] == "greeting"));
+}
