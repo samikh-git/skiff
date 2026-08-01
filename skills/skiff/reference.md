@@ -30,7 +30,7 @@
 
 | Flag | Notes |
 |------|-------|
-| `--auth-header K:V` | Repeatable; `env:` / `file:` on values |
+| `--auth-header K:V` | Repeatable; values must use `env:` / `file:` (also `Bearer env:VAR` / `Bearer:env:VAR`) |
 | `--env K=V` | Stdio child env |
 | `--transport auto\|sse\|streamable` | MCP HTTP |
 | `--base-url` | OpenAPI server override |
@@ -70,6 +70,14 @@ skiff doctor --json
 ```
 
 Prints binary version/PATH, cache/config dirs, spool/oauth/session/bake summary, and install hints.
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Runtime / MCP `isError` |
+| 2 | Usage / bad args |
 
 ## Paths
 

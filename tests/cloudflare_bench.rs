@@ -19,12 +19,6 @@ fn enabled() -> bool {
     ) && (std::env::var("CF_API_TOKEN").is_ok() || std::env::var("CLOUDFLARE_API_TOKEN").is_ok())
 }
 
-fn token() -> String {
-    std::env::var("CF_API_TOKEN")
-        .or_else(|_| std::env::var("CLOUDFLARE_API_TOKEN"))
-        .expect("CF_API_TOKEN")
-}
-
 fn skiff_cached(cache: &std::path::Path) -> Command {
     let mut cmd = Command::new(cargo_bin!("skiff"));
     cmd.env("SKIFF_CACHE_DIR", cache);
@@ -39,12 +33,18 @@ struct RunOut {
 }
 
 fn run(cache: &std::path::Path, args: &[&str]) -> RunOut {
-    let auth = format!("Authorization:Bearer {}", token());
+    // Prefer env: so the token never appears on argv (skiff rejects literals).
+    if std::env::var_os("CF_API_TOKEN").is_none() {
+        if let Ok(t) = std::env::var("CLOUDFLARE_API_TOKEN") {
+            std::env::set_var("CF_API_TOKEN", t);
+        }
+    }
+    let auth = "Authorization:Bearer:env:CF_API_TOKEN";
     let mut argv = vec![
         "--transport",
         "streamable",
         "--auth-header",
-        auth.as_str(),
+        auth,
         "--inline",
     ];
     argv.extend_from_slice(args);

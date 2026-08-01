@@ -162,20 +162,66 @@ export SKIFF_BENCH_CF=1
 cargo test --test cloudflare_bench -- --ignored --nocapture
 ```
 
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Runtime failure, including MCP `isError: true` |
+| 2 | Usage / bad args (unknown tool, invalid flags) |
+
 ## Do / don't
 
 - Do: `--agent`, `--detail names|brief`, `--describe`, `--json` / `--toon`, `--head`, `--refresh` when schemas stale
-- Do: `skiff doctor` when install/path/cache looks wrong
+- Do: `skiff doctor` when install/path/cache looks wrong; rebuild/reinstall if PATH binary lags the skill
 - Do: grep spooled paths; use `--envelope` only when you need the wire form
 - Don't: dump full `--detail full` catalogs into agent context
 - Don't: pass untrusted remote URLs (no SSRF sandbox)
 - Don't: put `SKIFF_CACHE_DIR` on a world-writable share
+- Don't: put literal secrets on argv — use `env:` / `file:` (including `Authorization:Bearer:env:VAR`)
 
-## Wrap an API as a skill
+## Generating a skill from an API
 
-1. List/probe with `skiff … --agent --list` and real calls  
-2. `bake create` with `env:` auth + filters  
-3. `bake install NAME --dir <skill>/scripts/`  
-4. Write `SKILL.md` with gotchas only — not a full `--help` dump  
+When the user asks to create a skill from an MCP server, OpenAPI spec, or GraphQL endpoint:
 
-Flag tables: [reference.md](reference.md).
+1. **Discover lightly** (keep tokens low):
+   ```bash
+   skiff --mcp https://target.example.com/mcp --agent --list
+   skiff --mcp https://target.example.com/mcp --agent --search PATTERN
+   ```
+2. **Describe** only the tools you need:
+   ```bash
+   skiff --mcp https://target.example.com/mcp --describe TOOL
+   # or: skiff … TOOL --help --json
+   ```
+3. **Probe** with real calls. Prefer `--agent` / `--json`; use `--head N` for large arrays. If stdout has `"spooled": true`, **`rg` the `path`** — do not `cat` the whole file.
+   Test for: oversized fields, date formats, pagination, error messages, binary vs text, scope surprises.
+4. **Bake** connection settings (secrets via `env:` / `file:` only):
+   ```bash
+   skiff bake create myapi \
+     --mcp https://target.example.com/mcp \
+     --auth-header "Authorization:Bearer:env:MYAPI_TOKEN" \
+     --exclude "delete-*" --session myapi --force
+   ```
+5. **Warm session** (stdio / fat catalogs):
+   ```bash
+   skiff --mcp https://target.example.com/mcp \
+     --auth-header "Authorization:Bearer:env:MYAPI_TOKEN" \
+     --session-start myapi
+   skiff @myapi --agent --search PATTERN
+   ```
+6. **Install** a wrapper into the skill scripts dir:
+   ```bash
+   skiff bake install myapi --dir .cursor/skills/myapi/scripts/
+   ```
+7. **Write `SKILL.md`** that teaches another agent how to use this API. Focus on knowledge **not** in `--help`:
+   - Frontmatter `name` / `description` / allowed tools for Bash
+   - Core workflow using the baked wrapper (`--agent`, `--describe`, spool/`rg`)
+   - Before-query checklist (pagination, `--head`, date formats)
+   - Anti-patterns & gotchas found while probing
+   - Output processing (`--json` content-only vs `--envelope`, `--toon`, spool)
+
+**Knowledge delta:** do not duplicate parameter listings from `--help`. Document what actually matters for common tasks, surprising defaults, and rate/size limits.
+
+Flag tables: [reference.md](reference.md). Competitive backlog: repo [ROADMAP.md](../../ROADMAP.md).
+

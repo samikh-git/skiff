@@ -35,7 +35,7 @@ Guidance for coding agents and humans extending this repo. Prefer this file plus
 
 - `--agent` / `SKIFF_AGENT=1`: JSON; search ⇒ names + `--top 20`; else brief; spool default 64KiB.
 - `--json` = MCP **content-only**; `--envelope` / `--full` for wire `CallToolResult`.
-- Auth header form: `Authorization:Bearer <token>` (space after `Bearer`). `env:` / `file:` secret prefixes are required for `--auth-header` and OAuth client id/secret values — literal secrets on argv are rejected at runtime.
+- Auth header form: `Authorization:Bearer <token>` (space after `Bearer`). Prefer `--auth-header Authorization:Bearer:env:VAR` or `Authorization:env:VAR` (value may include the `Bearer ` prefix). `env:` / `file:` secret prefixes are required — literal secrets on argv are rejected at runtime.
 - Cache/config: `SKIFF_CACHE_DIR` / `SKIFF_CONFIG_DIR` → `~/.cache/skiff`, `~/.config/skiff`.
 - Do not commit `.env`, tokens, or cache dumps.
 

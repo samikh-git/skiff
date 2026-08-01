@@ -51,7 +51,18 @@ def token() -> str:
 
 
 def auth_header() -> str:
-    return f"Authorization:Bearer {token()}"
+    """Return an auth header that keeps the token off argv.
+
+    skiff rejects literal ``--auth-header`` values; both skiff and Python mcp2cli
+    accept ``env:`` / ``file:`` prefixes. Prefer ``Authorization:Bearer:env:…``
+    so the process list never contains the raw token.
+    """
+    # Ensure the token is present for env: resolution (also loads from .env above).
+    _ = token()
+    # Prefer CF_API_TOKEN; fall back so either env name works for env:VAR.
+    if not os.environ.get("CF_API_TOKEN") and os.environ.get("CLOUDFLARE_API_TOKEN"):
+        os.environ["CF_API_TOKEN"] = os.environ["CLOUDFLARE_API_TOKEN"]
+    return "Authorization:Bearer:env:CF_API_TOKEN"
 
 
 def resolve_rust_bin() -> str:

@@ -194,18 +194,26 @@ Cold first fetch of the fat Cloudflare catalog is ~1-2 s for Rust and ~2-3.5 s f
 
 - Not identical stdout: on fat `--search … --top 20`, Python returned fewer bytes (~719 vs ~1100). Formats and hit sets can differ; do not treat byte counts as a pure efficiency win either way.
 - Heuristic tokens: `ceil(bytes/4)`, not tiktoken.
-- Auth / transport: both use `--transport streamable` and `Authorization:Bearer …`. Results depend on Cloudflare MCP availability and token scope.
+- Auth / transport: both use `--transport streamable` and `Authorization:Bearer:env:CF_API_TOKEN` (literals rejected by skiff). Results depend on Cloudflare MCP availability and token scope.
 - Python pin: SDK pin is required for a fair streamable run; future upstream fixes may change absolute Python numbers.
 - Machine noise: medians over 10 warm runs on one laptop; expect variance across OS/load.
-- Feature asymmetry: `--agent`, sessions, spool, and native `--toon` are Rust-only in this harness.
+- Feature asymmetry in the harness: `--agent`, spool, and native `--toon` are skiff-oriented. **Upstream Python mcp2cli also has sessions** (as of 3.3.x); the session warm-search row is still skiff-only in this script because Python’s session warm path is much slower on fat catalogs (see [ROADMAP.md](ROADMAP.md) gap analysis).
 
 Token and byte counts depend on the scenario; use progressive `--detail`, `--top`, and `--agent` to limit context size.
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Runtime failure, including MCP `isError: true` tool results |
+| 2 | Usage / bad args (unknown tool, missing required flag, etc.) |
 
 ## Status / limits
 
 Shipped: OpenAPI, MCP stdio/HTTP (streamable + SSE), OAuth (including mid-daemon refresh for HTTP sessions), GraphQL, sessions (Unix), bake/`@name`, resources/prompts without requiring a session, list/search/output flags, native `--toon`, `--envelope`, spool overflow, `--agent` defaults, `skiff doctor`.
 
-Not done yet: no Windows sessions. See [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md).
+Not done yet: no Windows sessions. Competitive backlog (skill-from-API playbook, editor MCP import, shell completion, OpenAPI realism): [ROADMAP.md](ROADMAP.md).
 
 ## License
 

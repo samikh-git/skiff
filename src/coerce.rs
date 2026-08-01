@@ -125,15 +125,28 @@ pub fn coerce_value(value: Option<Value>, schema: &Value) -> Option<Value> {
 
 /// Resolve `env:VAR` or `file:/path` secret values.
 ///
+/// Also accepts `Bearer env:VAR` / `Bearer:env:VAR` (and the same for `file:`)
+/// so `--auth-header Authorization:Bearer:env:TOKEN` matches the documented form
+/// while still keeping the secret off argv.
+///
 /// Literal values (no recognized prefix) are rejected: secrets must never be
 /// passed directly on argv, where they leak via `ps`, `/proc/<pid>/cmdline`,
 /// and shell history.
 pub fn resolve_secret(value: &str) -> Result<String> {
-    if let Some(var) = value.strip_prefix("env:") {
-        return std::env::var(var)
-            .map_err(|_| Error::runtime(format!("environment variable {var:?} is not set")));
-    }
-    if let Some(path) = value.strip_prefix("file:") {
+    let value = value.trim();
+    // `Authorization:Bearer:env:VAR` → value `Bearer:env:VAR` after Name: split.
+    let (bearer_prefix, rest) = if let Some(rest) = value.strip_prefix("Bearer ") {
+        (true, rest.trim())
+    } else if let Some(rest) = value.strip_prefix("Bearer:") {
+        (true, rest.trim())
+    } else {
+        (false, value)
+    };
+
+    let resolved = if let Some(var) = rest.strip_prefix("env:") {
+        std::env::var(var)
+            .map_err(|_| Error::runtime(format!("environment variable {var:?} is not set")))?
+    } else if let Some(path) = rest.strip_prefix("file:") {
         let path = std::path::Path::new(path);
         if !path.exists() {
             return Err(Error::runtime(format!(
@@ -142,11 +155,22 @@ pub fn resolve_secret(value: &str) -> Result<String> {
             )));
         }
         let text = std::fs::read_to_string(path)?;
-        return Ok(text.trim_end_matches('\n').to_string());
+        text.trim_end_matches('\n').to_string()
+    } else {
+        return Err(Error::runtime(
+            "refusing literal secret value: use env:VAR or file:/path instead of putting secrets directly on the command line",
+        ));
+    };
+
+    if bearer_prefix {
+        if resolved.to_ascii_lowercase().starts_with("bearer ") {
+            Ok(resolved)
+        } else {
+            Ok(format!("Bearer {resolved}"))
+        }
+    } else {
+        Ok(resolved)
     }
-    Err(Error::runtime(
-        "refusing literal secret value: use env:VAR or file:/path instead of putting secrets directly on the command line",
-    ))
 }
 
 /// Truncate JSON arrays to first N elements; pass through other values.
@@ -305,6 +329,19 @@ mod tests {
         assert_eq!(
             resolve_secret("env:SKIFF_TEST_RESOLVE_SECRET_ENV").unwrap(),
             "shh"
+        );
+        assert_eq!(
+            resolve_secret("Bearer:env:SKIFF_TEST_RESOLVE_SECRET_ENV").unwrap(),
+            "Bearer shh"
+        );
+        assert_eq!(
+            resolve_secret("Bearer env:SKIFF_TEST_RESOLVE_SECRET_ENV").unwrap(),
+            "Bearer shh"
+        );
+        std::env::set_var("SKIFF_TEST_RESOLVE_SECRET_ENV", "Bearer already");
+        assert_eq!(
+            resolve_secret("Bearer:env:SKIFF_TEST_RESOLVE_SECRET_ENV").unwrap(),
+            "Bearer already"
         );
         std::env::remove_var("SKIFF_TEST_RESOLVE_SECRET_ENV");
     }
