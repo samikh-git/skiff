@@ -10,24 +10,28 @@ Inspired by [knowsuchagency/mcp2cli](https://github.com/knowsuchagency/mcp2cli) 
 # Homebrew (samikh-git tap)
 brew tap samikh-git/tools
 brew install skiff
+# upgrade later: brew upgrade skiff
 
 # crates.io (package name skiff-cli; binary is skiff)
 cargo install skiff-cli
+# from this repo (keeps PATH current while developing):
+cargo install --path . --force
 
-# from source
+# from source / git
 cargo install --git https://github.com/samikh-git/skiff --locked
-# or: cargo build --release && cargo install --path .
 
 # Agent skill (Cursor / Claude / Codex / … via skills CLI)
 npx skills add samikh-git/skiff
 # or: npx skills add samikh-git/skiff -g          # global
 #     npx skills add samikh-git/skiff -s skiff -y # non-interactive
 
-skiff doctor          # PATH, cache/config, sessions, bake
+skiff doctor          # PATH, cache/config, sessions, bake; warns if PATH binary is stale
 skiff doctor --json
 ```
 
 Binary: `skiff` on PATH after brew/cargo install (or `./target/release/skiff` from this repo).
+
+If `skiff doctor` reports **stale PATH**, the binary `which skiff` resolves is older than the one you just built (missing `completion`, `bake import`, etc.). Refresh with `cargo install --path . --force` or `brew upgrade skiff`, then re-run doctor.
 
 Shell completion (optional):
 
@@ -231,9 +235,9 @@ Token and byte counts depend on the scenario; use progressive `--detail`, `--top
 
 ## Status / limits
 
-Shipped: OpenAPI, MCP stdio/HTTP (streamable + SSE), OAuth (including mid-daemon refresh for HTTP sessions), GraphQL, sessions (Unix), bake/`@name`, resources/prompts without requiring a session, list/search/output flags, native `--toon`, `--envelope`, spool overflow, `--agent` defaults, `skiff doctor`.
+Shipped: OpenAPI, MCP stdio/HTTP (streamable + SSE), OAuth (including mid-daemon refresh for HTTP sessions), GraphQL, sessions (Unix), bake/`@name`/`bake import`, resources/prompts without requiring a session, list/search/output flags, native `--toon`, `--envelope`, spool overflow, `--agent` defaults, `skiff doctor` (including stale PATH detection), shell completion.
 
-Not done yet: no Windows sessions. Competitive backlog (skill-from-API playbook, editor MCP import, shell completion, OpenAPI realism): [ROADMAP.md](ROADMAP.md).
+Not done yet: no Windows sessions. Competitive backlog (dogfood / OpenAPI realism): [ROADMAP.md](ROADMAP.md).
 
 ## License
 

@@ -2,26 +2,18 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.1.3 — 2026-08-01
 
 ### Added
 
-- `skiff doctor` / `skiff doctor --json` — binary PATH, cache/config dirs, spool/oauth/session/bake summary, install hints
-- Canonical agent playbook in README + skill; local demo script [`examples/agent_workflow.sh`](examples/agent_workflow.sh)
-- Mid-daemon OAuth refresh for HTTP `--session` (token rotate → reconnect before RPC; clearer auth/child-death errors)
-- MCP `--list-resources` / `--read-resource` / `--list-prompts` / `--get-prompt` work with `--mcp` / `--mcp-stdio` (session no longer required)
-- [ROADMAP.md](ROADMAP.md) — competitive gap analysis vs Python mcp2cli / mcpx / mcpli / mcpc / mcporter; ranked Next backlog
-- `skiff bake import` — import MCP servers from Cursor (`~/.cursor/mcp.json`), Claude, or Codex into bake (`--from`, `--path`, `--name`, `--dry-run`, `--force`)
-- `skiff completion bash|zsh|fish` — shell completion for bake/`@name`, sessions, and common flags (`skiff __complete` helpers)
+- `skiff bake import` — import MCP servers from Cursor / Claude / Codex into bake
+- `skiff completion bash|zsh|fish` — shell completion (`__complete` helpers for bake/session names)
+- `skiff doctor` stale PATH detection — version/mtime/feature probes (`completion`, `bake_import`, …); `ok: false` when PATH lags
 
 ### Changed
 
-- Agent skill prefers `skiff` on PATH (`brew` / `cargo install skiff-cli`) over local `cargo build`
-- README documents warm discovery and progressive discovery; exit codes; corrected “sessions Rust-only” bench note (Python 3.3.x also has sessions)
-- `--auth-header` accepts `Bearer env:VAR` / `Bearer:env:VAR` (and `file:`) so documented `Authorization:Bearer:env:…` works while keeping secrets off argv
-- `scripts/bench_vs_python.py` / CF bench use `Authorization:Bearer:env:CF_API_TOKEN` instead of literal tokens
-- Agent skill: expanded “Generating a skill from an API” playbook + exit codes
-- `bake show` leaves `Bearer:env:` / `Bearer:file:` auth values unmasked (same as bare `env:` / `file:`)
+- Competitive gap analysis documented in ROADMAP; skill-from-API playbook; exit codes; `Bearer:env:` auth resolution
+- README / skill: install, completion, bake import, doctor refresh guidance
 
 ## 0.1.2 — 2026-07-31
 

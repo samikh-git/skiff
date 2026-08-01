@@ -69,7 +69,7 @@ skiff doctor
 skiff doctor --json
 ```
 
-Prints binary version/PATH, cache/config dirs, spool/oauth/session/bake summary, and install hints.
+Prints binary version/PATH, whether PATH matches the running binary, feature probes (`completion`, `bake_import`, …), cache/config dirs, spool/oauth/session/bake summary, and install hints. When `stale_path_binary` is true (or human output says `stale PATH: YES`), refresh PATH with `cargo install --path . --force` or `brew upgrade skiff`.
 
 ## Bake import
 

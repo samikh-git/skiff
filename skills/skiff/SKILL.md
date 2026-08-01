@@ -20,16 +20,23 @@ Prefer `skiff` on PATH (do **not** require a local cargo build):
 ```bash
 # Homebrew
 brew tap samikh-git/tools && brew install skiff
+# upgrade: brew upgrade skiff
 
 # crates.io (package skiff-cli; binary is skiff)
 cargo install skiff-cli
 
-# verify
+# from this repo while developing
+cargo install --path . --force
+
+# verify (flags stale PATH installs)
 skiff doctor
+skiff doctor --json
 skiff --version
 ```
 
 In this repo only, fall back to `./target/release/skiff` after `cargo build --release`.
+
+If doctor prints **stale PATH: YES**, reinstall (`cargo install --path . --force` or `brew upgrade skiff`) so agents do not call an outdated `~/.cargo/bin/skiff`.
 
 Optional: `export SKIFF=skiff` if a script expects `$SKIFF`; otherwise call `skiff` directly.
 

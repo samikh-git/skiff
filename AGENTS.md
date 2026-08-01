@@ -52,9 +52,11 @@ CF_API_TOKEN=… SKIFF_BENCH_CF=1 cargo test --test cloudflare_bench -- --ignore
 # Rust vs Python (needs pandas + uv):
 cargo build --release
 python3 scripts/bench_vs_python.py --runs 10
+# keep PATH current while developing:
+cargo install --path . --force && skiff doctor
 ```
 
-When changing discovery/index/session paths, re-run at least `tools_index` unit tests + `session_integration`, and prefer a short `bench_vs_python` warm fat-search check if network/token available.
+When changing discovery/index/session paths, re-run at least `tools_index` unit tests + `session_integration`, and prefer a short `bench_vs_python` warm fat-search check if network/token available. After local installs, `skiff doctor` should report `stale PATH: no`.
 
 ## Docs to keep in sync
 

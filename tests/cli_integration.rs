@@ -256,6 +256,9 @@ fn doctor_reports_version() {
     let data: Value = serde_json::from_slice(&out).unwrap();
     assert_eq!(data["version"], env!("CARGO_PKG_VERSION"));
     assert!(data["cache_dir"].as_str().is_some());
+    assert!(data.get("stale_path_binary").is_some());
+    assert!(data.get("path_features").is_some());
+    assert!(data.get("hints").and_then(|h| h.as_array()).is_some());
 }
 
 #[test]

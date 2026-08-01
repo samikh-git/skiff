@@ -1,7 +1,12 @@
 //! `skiff doctor` — self-check for agents and humans.
+//!
+//! Detects a stale PATH binary (older mtime / missing recent features) so agents
+//! do not debug against an outdated `~/.cargo/bin/skiff` while developing from source.
 
 use std::fs;
+use std::path::Path;
 use std::process::Command;
+use std::time::SystemTime;
 
 use serde_json::json;
 
@@ -10,14 +15,37 @@ use crate::error::Result;
 use crate::paths::{cache_dir, config_dir};
 use crate::spool::spool_dir;
 
+/// Features that a current skiff install should expose (probed via PATH binary help).
+const EXPECTED_FEATURES: &[&str] = &["completion", "bake_import", "describe", "agent"];
+
 /// Print environment diagnostics (JSON with `--json`).
-pub fn handle_doctor(json: bool) -> Result<()> {
+pub fn handle_doctor(json_out: bool) -> Result<()> {
     let version = env!("CARGO_PKG_VERSION");
-    let exe = std::env::current_exe()
+    let exe_path = std::env::current_exe().ok();
+    let exe = exe_path
+        .as_ref()
         .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "(unknown)".into());
+        .unwrap_or_else(|| "(unknown)".into());
 
     let on_path = which_skiff();
+    let path_probe = on_path
+        .as_ref()
+        .map(|p| probe_path_binary(Path::new(p)))
+        .unwrap_or_default();
+
+    let same_binary = match (&exe_path, &on_path) {
+        (Some(exe), Some(path)) => paths_same(exe, Path::new(path)),
+        _ => false,
+    };
+
+    let stale = diagnose_stale(
+        version,
+        exe_path.as_deref(),
+        on_path.as_deref().map(Path::new),
+        same_binary,
+        &path_probe,
+    );
+
     let cache = cache_dir();
     let config = config_dir();
     let spool = spool_dir();
@@ -48,11 +76,21 @@ pub fn handle_doctor(json: bool) -> Result<()> {
     #[cfg(not(unix))]
     let sessions: Vec<serde_json::Value> = Vec::new();
 
+    let ok = cache_ok && config_ok && !stale.is_stale;
+    let hints = doctor_hints(on_path.as_ref(), cache_ok, config_ok, &stale, same_binary);
+
     let report = json!({
-        "ok": cache_ok && config_ok,
+        "ok": ok,
         "version": version,
         "binary": exe,
         "on_path": on_path,
+        "path_version": path_probe.version,
+        "path_same_as_running": same_binary,
+        "path_mtime_secs": path_probe.mtime_secs,
+        "running_mtime_secs": mtime_secs(exe_path.as_deref()),
+        "path_features": path_probe.features,
+        "stale_path_binary": stale.is_stale,
+        "stale_reasons": stale.reasons,
         "cache_dir": cache.display().to_string(),
         "cache_ok": cache_ok,
         "config_dir": config.display().to_string(),
@@ -63,19 +101,35 @@ pub fn handle_doctor(json: bool) -> Result<()> {
         "baked": baked,
         "sessions": sessions,
         "sessions_supported": cfg!(unix),
-        "hints": doctor_hints(on_path.as_ref(), cache_ok, config_ok),
+        "hints": hints,
     });
 
-    if json {
+    if json_out {
         println!("{}", serde_json::to_string_pretty(&report)?);
         return Ok(());
     }
 
-    println!("skiff doctor {}", version);
+    println!("skiff doctor {version}");
     println!("  binary:     {exe}");
     match &on_path {
-        Some(p) => println!("  on PATH:    {p}"),
+        Some(p) => {
+            let ver = path_probe.version.as_deref().unwrap_or("(version unknown)");
+            let same = if same_binary {
+                "same as running"
+            } else {
+                "differs from running"
+            };
+            println!("  on PATH:    {p} ({ver}; {same})");
+        }
         None => println!("  on PATH:    (not found — install via brew/cargo; see skill)"),
+    }
+    if stale.is_stale {
+        println!("  stale PATH: YES");
+        for r in &stale.reasons {
+            println!("    - {r}");
+        }
+    } else if on_path.is_some() {
+        println!("  stale PATH: no");
     }
     println!(
         "  cache:      {} {}",
@@ -116,10 +170,157 @@ pub fn handle_doctor(json: bool) -> Result<()> {
     {
         println!("  sessions:   unsupported on this platform");
     }
-    for h in doctor_hints(on_path.as_ref(), cache_ok, config_ok) {
+    for h in hints {
         println!("  hint: {h}");
     }
     Ok(())
+}
+
+#[derive(Debug, Default)]
+struct PathProbe {
+    version: Option<String>,
+    mtime_secs: Option<u64>,
+    features: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Default)]
+struct StaleDiag {
+    is_stale: bool,
+    reasons: Vec<String>,
+}
+
+fn probe_path_binary(path: &Path) -> PathProbe {
+    let mut probe = PathProbe {
+        mtime_secs: mtime_secs(Some(path)),
+        ..Default::default()
+    };
+
+    if let Ok(out) = Command::new(path).arg("--version").output() {
+        if out.status.success() {
+            let s = String::from_utf8_lossy(&out.stdout);
+            // "skiff 0.1.2" or similar
+            if let Some(v) = s.split_whitespace().nth(1) {
+                probe.version = Some(v.trim().to_string());
+            } else {
+                probe.version = Some(s.trim().to_string());
+            }
+        }
+    }
+
+    // Probe recent surfaces without requiring network.
+    let bake_help = Command::new(path)
+        .args(["bake", "--help"])
+        .output()
+        .ok()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout).to_string() + &String::from_utf8_lossy(&o.stderr)
+        })
+        .unwrap_or_default();
+    let top_help = Command::new(path)
+        .args(["--help"])
+        .output()
+        .ok()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout).to_string() + &String::from_utf8_lossy(&o.stderr)
+        })
+        .unwrap_or_default();
+    let completion_ok = Command::new(path)
+        .args(["completion", "bash"])
+        .output()
+        .map(|o| {
+            o.status.success() && String::from_utf8_lossy(&o.stdout).contains("_skiff_complete")
+        })
+        .unwrap_or(false);
+
+    probe.features.insert(
+        "completion".into(),
+        json!(completion_ok || top_help.contains("completion")),
+    );
+    probe.features.insert(
+        "bake_import".into(),
+        json!(bake_help.contains("import") || bake_help.contains("Import")),
+    );
+    probe
+        .features
+        .insert("describe".into(), json!(top_help.contains("--describe")));
+    probe
+        .features
+        .insert("agent".into(), json!(top_help.contains("--agent")));
+
+    probe
+}
+
+fn diagnose_stale(
+    running_version: &str,
+    running_exe: Option<&Path>,
+    path_exe: Option<&Path>,
+    same_binary: bool,
+    probe: &PathProbe,
+) -> StaleDiag {
+    let mut diag = StaleDiag::default();
+    let Some(path_exe) = path_exe else {
+        return diag;
+    };
+
+    if same_binary {
+        return diag;
+    }
+
+    if let Some(path_ver) = &probe.version {
+        if path_ver != running_version {
+            diag.is_stale = true;
+            diag.reasons.push(format!(
+                "PATH reports skiff {path_ver} but this process is {running_version}"
+            ));
+        }
+    }
+
+    if let (Some(path_m), Some(run_m)) = (probe.mtime_secs, mtime_secs(running_exe)) {
+        if path_m + 60 < run_m {
+            // PATH binary more than a minute older than the running binary.
+            diag.is_stale = true;
+            diag.reasons.push(format!(
+                "PATH binary is older than the running binary (mtime {path_m} < {run_m})"
+            ));
+        }
+    }
+
+    for feat in EXPECTED_FEATURES {
+        let present = probe
+            .features
+            .get(*feat)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if !present {
+            diag.is_stale = true;
+            diag.reasons.push(format!(
+                "PATH binary missing `{feat}` (reinstall: cargo install --path . --force)"
+            ));
+        }
+    }
+
+    // Dedup-ish: if we already flagged version/mtime, still keep feature reasons —
+    // they tell the user *what* is wrong.
+    let _ = path_exe;
+    diag
+}
+
+fn paths_same(a: &Path, b: &Path) -> bool {
+    let ca = fs::canonicalize(a).unwrap_or_else(|_| a.to_path_buf());
+    let cb = fs::canonicalize(b).unwrap_or_else(|_| b.to_path_buf());
+    ca == cb
+}
+
+fn mtime_secs(path: Option<&Path>) -> Option<u64> {
+    let path = path?;
+    let meta = fs::metadata(path).ok()?;
+    let modified = meta.modified().ok()?;
+    Some(
+        modified
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .ok()?
+            .as_secs(),
+    )
 }
 
 fn which_skiff() -> Option<String> {
@@ -135,14 +336,14 @@ fn which_skiff() -> Option<String> {
     }
 }
 
-fn ensure_dir_report(path: &std::path::Path) -> bool {
+fn ensure_dir_report(path: &Path) -> bool {
     if path.is_dir() {
         return true;
     }
     fs::create_dir_all(path).is_ok()
 }
 
-fn count_files(dir: &std::path::Path) -> usize {
+fn count_files(dir: &Path) -> usize {
     let Ok(rd) = fs::read_dir(dir) else {
         return 0;
     };
@@ -151,7 +352,7 @@ fn count_files(dir: &std::path::Path) -> usize {
         .count()
 }
 
-fn count_subdirs(dir: &std::path::Path) -> usize {
+fn count_subdirs(dir: &Path) -> usize {
     let Ok(rd) = fs::read_dir(dir) else {
         return 0;
     };
@@ -160,7 +361,13 @@ fn count_subdirs(dir: &std::path::Path) -> usize {
         .count()
 }
 
-fn doctor_hints(on_path: Option<&String>, cache_ok: bool, config_ok: bool) -> Vec<String> {
+fn doctor_hints(
+    on_path: Option<&String>,
+    cache_ok: bool,
+    config_ok: bool,
+    stale: &StaleDiag,
+    same_binary: bool,
+) -> Vec<String> {
     let mut hints = Vec::new();
     if on_path.is_none() {
         hints.push(
@@ -168,6 +375,25 @@ fn doctor_hints(on_path: Option<&String>, cache_ok: bool, config_ok: bool) -> Ve
              — or: cargo install skiff-cli"
                 .into(),
         );
+    }
+    if stale.is_stale {
+        hints.push(
+            "PATH skiff looks stale vs this binary. Update with: \
+             cargo install --path . --force \
+             — or: brew upgrade skiff \
+             — then re-run: skiff doctor"
+                .into(),
+        );
+        if !same_binary {
+            if let Some(p) = on_path {
+                hints.push(format!(
+                    "Running {} while PATH resolves to {p}",
+                    std::env::current_exe()
+                        .map(|x| x.display().to_string())
+                        .unwrap_or_else(|_| "(this binary)".into())
+                ));
+            }
+        }
     }
     if !cache_ok {
         hints.push("Cannot create cache dir; check SKIFF_CACHE_DIR permissions".into());
@@ -177,9 +403,52 @@ fn doctor_hints(on_path: Option<&String>, cache_ok: bool, config_ok: bool) -> Ve
     }
     if hints.is_empty() {
         hints.push(
-            "First run: skiff --mcp-stdio 'npx -y @modelcontextprotocol/server-filesystem /tmp' --agent --list"
+            "Try: skiff bake import --dry-run \
+             — or: skiff --mcp-stdio 'npx -y @modelcontextprotocol/server-filesystem /tmp' --agent --list"
                 .into(),
         );
+        hints.push("Shell completion: eval \"$(skiff completion bash)\"".into());
     }
     hints
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnose_same_binary_not_stale() {
+        let probe = PathProbe::default();
+        let d = diagnose_stale("0.1.3", None, Some(Path::new("/tmp/skiff")), true, &probe);
+        assert!(!d.is_stale);
+    }
+
+    #[test]
+    fn diagnose_version_mismatch_is_stale() {
+        let mut probe = PathProbe {
+            version: Some("0.1.0".into()),
+            ..Default::default()
+        };
+        for f in EXPECTED_FEATURES {
+            probe.features.insert((*f).into(), json!(true));
+        }
+        let d = diagnose_stale("0.1.3", None, Some(Path::new("/tmp/skiff")), false, &probe);
+        assert!(d.is_stale);
+        assert!(d.reasons.iter().any(|r| r.contains("0.1.0")));
+    }
+
+    #[test]
+    fn diagnose_missing_feature_is_stale() {
+        let mut probe = PathProbe {
+            version: Some("0.1.3".into()),
+            ..Default::default()
+        };
+        probe.features.insert("agent".into(), json!(true));
+        probe.features.insert("describe".into(), json!(true));
+        // completion + bake_import missing
+        let d = diagnose_stale("0.1.3", None, Some(Path::new("/tmp/skiff")), false, &probe);
+        assert!(d.is_stale);
+        assert!(d.reasons.iter().any(|r| r.contains("completion")));
+        assert!(d.reasons.iter().any(|r| r.contains("bake_import")));
+    }
 }
