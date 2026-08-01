@@ -114,10 +114,7 @@ mod tests {
     #[test]
     fn no_filters() {
         let c = cmds();
-        assert_eq!(
-            names(&filter_commands(c.clone(), &[], &[], &[])),
-            names(&c)
-        );
+        assert_eq!(names(&filter_commands(c.clone(), &[], &[], &[])), names(&c));
     }
 
     #[test]

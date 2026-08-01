@@ -19,9 +19,7 @@ use url::Url;
 
 use crate::cache::{load_cached, save_cache};
 use crate::error::{Error, Result};
-use crate::mcp::common::{
-    auth_headers_to_http, call_tool_on, list_tools_on, McpClient,
-};
+use crate::mcp::common::{auth_headers_to_http, call_tool_on, list_tools_on, McpClient};
 use crate::oauth::OAuthReady;
 
 type ClientMsg = ClientJsonRpcMessage;
@@ -48,10 +46,7 @@ impl Sink<ClientMsg> for MpscSink {
         }
     }
 
-    fn start_send(
-        self: Pin<&mut Self>,
-        item: ClientMsg,
-    ) -> std::result::Result<(), Self::Error> {
+    fn start_send(self: Pin<&mut Self>, item: ClientMsg) -> std::result::Result<(), Self::Error> {
         self.tx.try_send(item).map_err(|e| {
             std::io::Error::new(std::io::ErrorKind::BrokenPipe, format!("sse send: {e}"))
         })
@@ -84,9 +79,7 @@ impl Stream for MpscStream {
     }
 }
 
-fn header_map_from(
-    headers: &HashMap<HeaderName, HeaderValue>,
-) -> HeaderMap {
+fn header_map_from(headers: &HashMap<HeaderName, HeaderValue>) -> HeaderMap {
     let mut map = HeaderMap::new();
     for (k, v) in headers {
         map.insert(k.clone(), v.clone());
@@ -185,7 +178,9 @@ async fn run_sse_bridge(
     mut write_rx: mpsc::Receiver<ClientMsg>,
     read_tx: mpsc::Sender<ServerMsg>,
 ) -> Result<()> {
-    let mut req = client.get(&sse_url).header(http::header::ACCEPT, "text/event-stream");
+    let mut req = client
+        .get(&sse_url)
+        .header(http::header::ACCEPT, "text/event-stream");
     for (k, v) in &headers {
         req = req.header(k, v);
     }
@@ -229,7 +224,8 @@ async fn run_sse_bridge(
         }
     }
 
-    let endpoint = endpoint.ok_or_else(|| Error::runtime("SSE server never sent endpoint event"))?;
+    let endpoint =
+        endpoint.ok_or_else(|| Error::runtime("SSE server never sent endpoint event"))?;
 
     loop {
         tokio::select! {

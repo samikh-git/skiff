@@ -92,6 +92,9 @@ mod tests {
         let line = serde_json::to_string(&req).unwrap();
         let back: SessionRequest = serde_json::from_str(&line).unwrap();
         assert_eq!(back.method, "list_tools");
-        assert_eq!(SessionMethod::parse(&back.method), Some(SessionMethod::ListTools));
+        assert_eq!(
+            SessionMethod::parse(&back.method),
+            Some(SessionMethod::ListTools)
+        );
     }
 }

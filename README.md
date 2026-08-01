@@ -4,6 +4,7 @@ Rust port of [knowsuchagency/mcp2cli](https://github.com/knowsuchagency/mcp2cli)
 
 ```bash
 cargo build --release
+cargo install --path .
 cargo test
 
 # OpenAPI
@@ -23,7 +24,7 @@ cargo test
 ./target/release/mcp2cli --graphql http://127.0.0.1:4000 user --id 1
 ./target/release/mcp2cli --graphql http://127.0.0.1:4000 --fields "id name" user --id 1
 
-# MCP sessions (reuse a warm connection)
+# MCP sessions (Unix only; reuse a warm connection)
 ./target/release/mcp2cli --mcp-stdio "python3 ./tests/fixtures/mcp_test_server.py" --session-start myfs
 ./target/release/mcp2cli --session myfs --list
 ./target/release/mcp2cli --session myfs echo --message hi
@@ -32,7 +33,7 @@ cargo test
 ./target/release/mcp2cli --session-stop myfs
 ```
 
-Sessions keep one long-lived MCP client behind a Unix-domain socket (`$MCP2CLI_CACHE_DIR/sessions/{name}.{sock,json,log}`). Socket mode is `0o600` with same-UID peer checks; start config is written as a `0o600` file (not argv) and unlinked by the daemon. Idle timeout defaults to 30 minutes (`--session-idle-secs` / `MCP2CLI_SESSION_IDLE_SECS`; `0` disables). Bake with `--session NAME` so `@name` reuses the warm daemon.
+Sessions keep one long-lived MCP client behind a Unix-domain socket (`$MCP2CLI_CACHE_DIR/sessions/{name}.{sock,json,log}`). Socket mode is `0o600` with same-UID peer checks; start config is written as a `0o600` file (not argv) and unlinked by the daemon. Idle timeout defaults to 30 minutes (`--session-idle-secs` / `MCP2CLI_SESSION_IDLE_SECS`; `0` disables). Bake with `--session NAME` so `@name` reuses the warm daemon. Sessions are not supported on Windows.
 
 ```bash
 # OAuth (MCP HTTP / OpenAPI URL fetch / GraphQL; not with --mcp-stdio)
@@ -46,7 +47,7 @@ Sessions keep one long-lived MCP client behind a Unix-domain socket (`$MCP2CLI_C
 
 Tokens cache under `~/.cache/mcp2cli/oauth/` (override with `MCP2CLI_CACHE_DIR`). Prefer streamable HTTP for OAuth; legacy SSE injects a Bearer at connect time only (no mid-stream refresh). GraphQL introspection caches under `~/.cache/mcp2cli/` like OpenAPI.
 
-**M1 status:** OpenAPI + MCP stdio/HTTP (streamable + legacy SSE) + OAuth + GraphQL + named session daemons + list/search/output flags + bake/`@name`.
+**M1 status:** OpenAPI + MCP stdio/HTTP (streamable + legacy SSE) + OAuth + GraphQL + named session daemons + list/search/output flags + bake/`@name`. `--toon` is accepted but currently warns and falls back to JSON. Remote URL fetch is not SSRF-sandboxed (treat untrusted `--spec`/`--mcp`/`--graphql` URLs carefully).
 
 ### Bake mode
 

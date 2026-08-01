@@ -115,22 +115,18 @@ pub fn oauth_dir_for_server(server_url: &str) -> PathBuf {
 }
 
 /// Resolve redirect URI: explicit validated URI, sticky cached, or fresh free port.
-pub fn resolve_redirect_uri(
-    explicit: Option<&str>,
-    sticky_uri: Option<&str>,
-) -> Result<String> {
+pub fn resolve_redirect_uri(explicit: Option<&str>, sticky_uri: Option<&str>) -> Result<String> {
     if let Some(uri) = explicit {
         validate_redirect_uri(uri)?;
         return Ok(uri.to_string());
     }
     if let Some(uri) = sticky_uri {
-        if let Ok(parsed) = Url::parse(uri) {
-            if parsed.scheme() == "http" {
-                let host = parsed.host_str().unwrap_or("127.0.0.1");
-                if let Some(port) = parsed.port() {
-                    if port_available(host, port) {
-                        return Ok(uri.to_string());
-                    }
+        // Re-validate sticky URI (file may have been tampered).
+        if let Ok(parsed) = validate_redirect_uri(uri) {
+            let host = parsed.host_str().unwrap_or("127.0.0.1");
+            if let Some(port) = parsed.port() {
+                if port_available(host, port) {
+                    return Ok(uri.to_string());
                 }
             }
         }
@@ -201,6 +197,14 @@ mod tests {
         let sticky = format!("http://127.0.0.1:{port}/callback");
         let resolved = resolve_redirect_uri(None, Some(&sticky)).unwrap();
         assert_eq!(resolved, sticky);
+    }
+
+    #[test]
+    fn sticky_non_loopback_is_ignored() {
+        let sticky = "http://0.0.0.0:19999/callback";
+        let resolved = resolve_redirect_uri(None, Some(sticky)).unwrap();
+        assert!(resolved.starts_with("http://127.0.0.1:"));
+        assert!(resolved.ends_with("/callback"));
     }
 
     #[test]

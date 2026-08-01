@@ -38,9 +38,7 @@ impl Petstore {
         let stdout = child.stdout.take().expect("stdout");
         let mut reader = BufReader::new(stdout);
         let mut line = String::new();
-        reader
-            .read_line(&mut line)
-            .expect("read petstore URL");
+        reader.read_line(&mut line).expect("read petstore URL");
         let base = line.trim().to_string();
         assert!(base.starts_with("http://"), "unexpected URL: {base}");
         // wait until openapi responds
@@ -123,7 +121,13 @@ fn openapi_list_pets_limit_and_create() {
 
     let out = mcp2cli()
         .args([
-            "--spec", &spec, "--base-url", &base, "list-pets", "--limit", "1",
+            "--spec",
+            &spec,
+            "--base-url",
+            &base,
+            "list-pets",
+            "--limit",
+            "1",
         ])
         .assert()
         .success()
@@ -158,14 +162,9 @@ fn openapi_list_pets_limit_and_create() {
 #[test]
 fn openapi_load_local_json_file() {
     let spec = fixtures_dir().join("petstore.json");
-    let data = mcp2cli::openapi::load_openapi_spec(
-        spec.to_str().unwrap(),
-        &[],
-        None,
-        Some(3600),
-        false,
-    )
-    .unwrap();
+    let data =
+        mcp2cli::openapi::load_openapi_spec(spec.to_str().unwrap(), &[], None, Some(3600), false)
+            .unwrap();
     assert!(data.get("paths").unwrap().get("/pets").is_some());
 }
 
@@ -227,13 +226,7 @@ fn mcp_stdio_search_and_env_not_shadowed() {
         .stdout(predicate::str::contains("add-numbers").not());
 
     let out = mcp2cli()
-        .args([
-            "--mcp-stdio",
-            &stdio_cmd,
-            "deploy",
-            "--env",
-            "production",
-        ])
+        .args(["--mcp-stdio", &stdio_cmd, "deploy", "--env", "production"])
         .timeout(Duration::from_secs(30))
         .assert()
         .success()

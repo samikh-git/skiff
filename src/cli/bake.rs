@@ -25,6 +25,7 @@ struct BakeCli {
 }
 
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum BakeCommand {
     /// Save connection settings as a named baked tool
     Create(CreateArgs),

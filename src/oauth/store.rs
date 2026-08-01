@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use rmcp::transport::auth::{AuthError, CredentialStore, StoredCredentials};
 
 use crate::error::Result;
+use crate::fsutil::{atomic_write_0600, ensure_dir_0700};
 use crate::oauth::config::oauth_dir_for_server;
 
 const CREDENTIALS_FILE: &str = "credentials.json";
@@ -48,8 +49,8 @@ impl FileCredentialStore {
     }
 
     pub fn save_sticky_redirect_uri(&self, uri: &str) -> Result<()> {
-        fs::create_dir_all(&self.dir)?;
-        atomic_write_restricted(&self.redirect_meta_path(), uri.as_bytes())?;
+        ensure_dir_0700(&self.dir)?;
+        atomic_write_0600(&self.redirect_meta_path(), uri.as_bytes())?;
         Ok(())
     }
 
@@ -77,18 +78,7 @@ impl FileCredentialStore {
 }
 
 fn atomic_write_restricted(path: &Path, bytes: &[u8]) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let tmp = path.with_extension("tmp");
-    fs::write(&tmp, bytes)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600));
-    }
-    fs::rename(&tmp, path)?;
-    Ok(())
+    atomic_write_0600(path, bytes)
 }
 
 #[async_trait]
@@ -98,12 +88,13 @@ impl CredentialStore for FileCredentialStore {
             .map_err(|e| AuthError::InternalError(e.to_string()))
     }
 
-    async fn save(
-        &self,
-        credentials: StoredCredentials,
-    ) -> std::result::Result<(), AuthError> {
-        fs::create_dir_all(&self.dir)
-            .map_err(|e| AuthError::InternalError(e.to_string()))?;
+    async fn save(&self, credentials: StoredCredentials) -> std::result::Result<(), AuthError> {
+        fs::create_dir_all(&self.dir).map_err(|e| AuthError::InternalError(e.to_string()))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&self.dir, fs::Permissions::from_mode(0o700));
+        }
         let json = serde_json::to_vec_pretty(&credentials)
             .map_err(|e| AuthError::InternalError(e.to_string()))?;
         atomic_write_restricted(&self.credentials_path(), &json)
@@ -133,9 +124,12 @@ mod tests {
 
     #[tokio::test]
     async fn roundtrip_and_perms() {
-        let _g = TEST_PATHS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = tempdir().unwrap();
-        set_cache_dir_override(Some(dir.path().to_path_buf()));
+        let dir = {
+            let _g = TEST_PATHS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let dir = tempdir().unwrap();
+            set_cache_dir_override(Some(dir.path().to_path_buf()));
+            dir
+        };
         let store = FileCredentialStore::for_server("https://mcp.example.com");
         let creds = StoredCredentials::new("cid".into(), None, vec![], None);
         store.save(creds.clone()).await.unwrap();
@@ -153,7 +147,9 @@ mod tests {
         }
         store.clear().await.unwrap();
         assert!(store.load().await.unwrap().is_none());
+        let _g = TEST_PATHS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         set_cache_dir_override(None);
+        drop(dir);
     }
 
     #[test]

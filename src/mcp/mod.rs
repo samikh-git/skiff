@@ -63,11 +63,14 @@ pub fn extract_mcp_commands(tools: &[Value]) -> Vec<CommandDef> {
                         .and_then(|v| v.as_str())
                         .unwrap_or(prop_name)
                 );
-                let choices = prop_schema.get("enum").and_then(|v| v.as_array()).map(|arr| {
-                    arr.iter()
-                        .filter_map(|x| x.as_str().map(str::to_string))
-                        .collect()
-                });
+                let choices = prop_schema
+                    .get("enum")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|x| x.as_str().map(str::to_string))
+                            .collect()
+                    });
                 params.push(ParamDef {
                     name: to_kebab(prop_name),
                     original_name: prop_name.clone(),

@@ -51,9 +51,15 @@ pub fn wait_for_callback(redirect_uri: &str, timeout: Duration) -> Result<Callba
         while Instant::now() < deadline {
             match listener.accept() {
                 Ok((stream, _)) => {
-                    if let Ok(result) = handle_connection(stream, &path_clone) {
-                        *shared_clone.lock().unwrap() = Some(result);
-                        return;
+                    match handle_connection(stream, &path_clone) {
+                        Ok(Some(result)) => {
+                            if let Ok(mut g) = shared_clone.lock() {
+                                *g = Some(result);
+                            }
+                            return;
+                        }
+                        Ok(None) => {} // wrong path / probe — keep waiting
+                        Err(_) => {}
                     }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -67,7 +73,7 @@ pub fn wait_for_callback(redirect_uri: &str, timeout: Duration) -> Result<Callba
     let _ = accept_thread.join();
     let result = shared
         .lock()
-        .unwrap()
+        .map_err(|_| Error::runtime("OAuth callback lock poisoned"))?
         .take()
         .ok_or_else(|| Error::runtime("OAuth callback timed out waiting for browser redirect"))?;
 
@@ -80,33 +86,44 @@ pub fn wait_for_callback(redirect_uri: &str, timeout: Duration) -> Result<Callba
     Ok(result)
 }
 
-fn handle_connection(mut stream: TcpStream, expected_path: &str) -> std::io::Result<CallbackResult> {
+/// Returns `Ok(Some(...))` only for the expected callback path; `Ok(None)` for probes.
+fn handle_connection(
+    mut stream: TcpStream,
+    expected_path: &str,
+) -> std::io::Result<Option<CallbackResult>> {
     let mut buf = [0u8; 8192];
     let n = stream.read(&mut buf)?;
     let req = String::from_utf8_lossy(&buf[..n]);
     let first_line = req.lines().next().unwrap_or("");
-    let path_and_query = first_line
-        .split_whitespace()
-        .nth(1)
-        .unwrap_or("/");
+    let path_and_query = first_line.split_whitespace().nth(1).unwrap_or("/");
 
     let (path, query) = match path_and_query.split_once('?') {
         Some((p, q)) => (p, q),
         None => (path_and_query, ""),
     };
 
+    let path_ok =
+        path == expected_path || path.trim_end_matches('/') == expected_path.trim_end_matches('/');
+    if !path_ok {
+        let body = "<html><body><h1>Not found</h1></body></html>";
+        let resp = format!(
+            "HTTP/1.1 404 Not Found\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        let _ = stream.write_all(resp.as_bytes());
+        return Ok(None);
+    }
+
     let mut result = CallbackResult::default();
-    if path == expected_path || path.trim_end_matches('/') == expected_path.trim_end_matches('/') {
-        for pair in query.split('&') {
-            if let Some((k, v)) = pair.split_once('=') {
-                let v = urlencoding_decode(v);
-                match k {
-                    "code" => result.code = Some(v),
-                    "state" => result.state = Some(v),
-                    "error" => result.error = Some(v),
-                    "iss" => result.iss = Some(v),
-                    _ => {}
-                }
+    for pair in query.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            let v = urlencoding_decode(v);
+            match k {
+                "code" => result.code = Some(v),
+                "state" => result.state = Some(v),
+                "error" => result.error = Some(v),
+                "iss" => result.iss = Some(v),
+                _ => {}
             }
         }
     }
@@ -123,8 +140,8 @@ fn handle_connection(mut stream: TcpStream, expected_path: &str) -> std::io::Res
         )
     } else {
         (
-            "404 Not Found",
-            "<html><body><h1>Not found</h1></body></html>",
+            "400 Bad Request",
+            "<html><body><h1>Missing authorization code</h1></body></html>",
         )
     };
 
@@ -133,7 +150,12 @@ fn handle_connection(mut stream: TcpStream, expected_path: &str) -> std::io::Res
         body.len()
     );
     let _ = stream.write_all(resp.as_bytes());
-    Ok(result)
+    // Complete the wait only when we got code or error (not an empty probe on the right path).
+    if result.code.is_some() || result.error.is_some() {
+        Ok(Some(result))
+    } else {
+        Ok(None)
+    }
 }
 
 fn urlencoding_decode(s: &str) -> String {
@@ -184,9 +206,8 @@ mod tests {
 
         thread::sleep(Duration::from_millis(100));
         let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
-        let req = format!(
-            "GET /callback?code=abc123&state=xyz&iss=https%3A%2F%2Fas.example HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
-        );
+        let req =
+            "GET /callback?code=abc123&state=xyz&iss=https%3A%2F%2Fas.example HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
         stream.write_all(req.as_bytes()).unwrap();
         let _ = stream.read(&mut [0u8; 256]);
 

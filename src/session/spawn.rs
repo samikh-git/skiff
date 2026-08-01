@@ -9,11 +9,11 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
+use crate::session::paths::chmod_0600;
 use crate::session::paths::{
     clear_stale_session, ensure_sessions_dir, load_meta, session_config_path, session_is_alive,
     session_log_path, session_sock_path, sessions_dir, unlink_session_files, validate_session_name,
 };
-use crate::session::paths::chmod_0600;
 
 pub const DEFAULT_IDLE_SECS: u64 = 1800;
 
@@ -65,10 +65,11 @@ fn session_start_unix(config: DaemonConfig) -> Result<()> {
 
     let config_path = session_config_path(&config.name);
     let json = serde_json::to_vec_pretty(&config)?;
-    fs::write(&config_path, &json)?;
-    chmod_0600(&config_path)?;
+    crate::fsutil::atomic_write_0600(&config_path, &json)?;
 
     let log_path = session_log_path(&config.name);
+    // Create empty log with 0o600 before redirecting stderr.
+    crate::fsutil::atomic_write_0600(&log_path, b"")?;
     let log_file = OpenOptions::new()
         .create(true)
         .append(true)

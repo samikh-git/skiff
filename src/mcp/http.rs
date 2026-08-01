@@ -11,9 +11,7 @@ use serde_json::{Map, Value};
 
 use crate::cache::{load_cached, save_cache};
 use crate::error::{Error, Result};
-use crate::mcp::common::{
-    auth_headers_to_http, call_tool_on, list_tools_on, McpClient,
-};
+use crate::mcp::common::{auth_headers_to_http, call_tool_on, list_tools_on, McpClient};
 use crate::oauth::OAuthReady;
 
 pub async fn fetch_mcp_tools_http(

@@ -6,7 +6,13 @@ use std::os::unix::io::AsRawFd;
 /// Return the peer process UID for a connected Unix stream.
 pub fn peer_uid<S: AsRawFd>(stream: &S) -> io::Result<u32> {
     let fd = stream.as_raw_fd();
-    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    ))]
     {
         let mut uid: libc::uid_t = 0;
         let mut gid: libc::gid_t = 0;

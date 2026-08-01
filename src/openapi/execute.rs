@@ -134,8 +134,8 @@ pub fn execute_openapi(
         .map_err(|e| Error::runtime(e.to_string()))?;
 
     let mut header_map = HeaderMap::new();
-    let is_multipart = !req_parts.files.is_empty()
-        || cmd.content_type.as_deref() == Some("multipart/form-data");
+    let is_multipart =
+        !req_parts.files.is_empty() || cmd.content_type.as_deref() == Some("multipart/form-data");
     if !is_multipart {
         header_map.insert(
             reqwest::header::CONTENT_TYPE,
@@ -218,18 +218,15 @@ pub fn execute_openapi(
     }
 
     if opts.json_output {
-        let data = serde_json::from_slice::<Value>(&bytes).unwrap_or_else(|_| {
-            Value::String(String::from_utf8_lossy(&bytes).into_owned())
-        });
+        let data = serde_json::from_slice::<Value>(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()));
         output_result(data, opts)?;
         return Ok(());
     }
 
     if opts.raw {
         use std::io::Write;
-        std::io::stdout()
-            .write_all(&bytes)
-            .map_err(Error::from)?;
+        std::io::stdout().write_all(&bytes).map_err(Error::from)?;
         return Ok(());
     }
 
@@ -255,11 +252,7 @@ fn value_to_query(v: &Value) -> String {
 }
 
 /// Resolve base URL from --base-url, servers[], or spec URL origin.
-pub fn resolve_base_url(
-    explicit: Option<&str>,
-    spec: &Value,
-    spec_source: &str,
-) -> Result<String> {
+pub fn resolve_base_url(explicit: Option<&str>, spec: &Value, spec_source: &str) -> Result<String> {
     if let Some(u) = explicit {
         return Ok(u.to_string());
     }
@@ -274,8 +267,8 @@ pub fn resolve_base_url(
 
     if base.is_empty() || !base.starts_with("http") {
         if spec_source.starts_with("http://") || spec_source.starts_with("https://") {
-            let url = reqwest::Url::parse(spec_source)
-                .map_err(|e| Error::runtime(e.to_string()))?;
+            let url =
+                reqwest::Url::parse(spec_source).map_err(|e| Error::runtime(e.to_string()))?;
             let origin = format!(
                 "{}://{}",
                 url.scheme(),
@@ -292,9 +285,7 @@ pub fn resolve_base_url(
                 base = origin;
             }
         } else if base.is_empty() {
-            return Err(Error::runtime(
-                "cannot determine base URL. Use --base-url.",
-            ));
+            return Err(Error::runtime("cannot determine base URL. Use --base-url."));
         }
     }
     Ok(base)

@@ -7,3 +7,7 @@
 .gitignore.upstream
 __pycache__/
 *.pyc
+.tmp/
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**/

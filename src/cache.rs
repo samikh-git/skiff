@@ -9,6 +9,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::error::Result;
+use crate::fsutil::{atomic_write_0600, ensure_dir_0700};
 use crate::paths::{cache_dir, DEFAULT_CACHE_TTL};
 
 pub use crate::paths::DEFAULT_CACHE_TTL as DEFAULT_TTL;
@@ -26,7 +27,7 @@ pub fn cache_key_for(config: &Value) -> String {
             let mut v = v.clone();
             if k == "auth_headers" {
                 if let Some(arr) = v.as_array_mut() {
-                    arr.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+                    arr.sort_by_key(|a| a.to_string());
                 }
             }
             filtered.insert(k.clone(), v);
@@ -42,22 +43,13 @@ fn cache_path(key: &str) -> PathBuf {
     cache_dir().join(format!("{key}.json"))
 }
 
-/// Atomically write JSON to `path` (temp + rename).
+/// Atomically write JSON to `path` (temp + rename) with mode `0o600`.
 pub fn atomic_write_json(path: &Path, data: &impl Serialize) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+        ensure_dir_0700(parent)?;
     }
-    let tmp = path.with_extension("json.tmp");
     let text = serde_json::to_string(data)?;
-    fs::write(&tmp, text)?;
-    // Best-effort restrictive perms on Unix.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600));
-    }
-    fs::rename(&tmp, path)?;
-    Ok(())
+    atomic_write_0600(path, text.as_bytes())
 }
 
 pub fn save_cache(key: &str, data: &Value) -> Result<()> {

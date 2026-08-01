@@ -42,13 +42,7 @@ pub fn session_config_path(name: &str) -> PathBuf {
 }
 
 pub fn ensure_sessions_dir() -> Result<()> {
-    fs::create_dir_all(sessions_dir())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(sessions_dir(), fs::Permissions::from_mode(0o700));
-    }
-    Ok(())
+    crate::fsutil::ensure_dir_0700(&sessions_dir())
 }
 
 pub fn is_process_alive(pid: u32) -> bool {
@@ -79,15 +73,8 @@ pub fn load_meta(name: &str) -> Result<Option<SessionMeta>> {
 pub fn write_meta(name: &str, meta: &SessionMeta) -> Result<()> {
     ensure_sessions_dir()?;
     let path = session_meta_path(name);
-    let tmp = path.with_extension("json.tmp");
     let json = serde_json::to_vec_pretty(meta)?;
-    fs::write(&tmp, &json)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600));
-    }
-    fs::rename(&tmp, &path)?;
+    crate::fsutil::atomic_write_0600(&path, &json)?;
     Ok(())
 }
 

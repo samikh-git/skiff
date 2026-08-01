@@ -102,7 +102,10 @@ fn build_graphql_param(arg: &Value, types_by_name: &HashMap<String, Value>) -> P
 
     if is_list {
         param_schema.insert("type".into(), Value::String("array".into()));
-        let item_type_name = named_t.get("name").and_then(|n| n.as_str()).unwrap_or("String");
+        let item_type_name = named_t
+            .get("name")
+            .and_then(|n| n.as_str())
+            .unwrap_or("String");
         let item_json = match item_type_name {
             "Int" => "integer",
             "Float" => "number",
@@ -175,9 +178,7 @@ pub fn extract_graphql_commands(schema: &Value) -> Vec<CommandDef> {
         })
         .unwrap_or_default();
 
-    let query_type_name = schema
-        .pointer("/queryType/name")
-        .and_then(|n| n.as_str());
+    let query_type_name = schema.pointer("/queryType/name").and_then(|n| n.as_str());
     let mutation_type_name = schema
         .pointer("/mutationType/name")
         .and_then(|n| n.as_str());
@@ -456,10 +457,8 @@ mod tests {
     #[test]
     fn type_mapping() {
         let types = HashMap::new();
-        let (t, req, _) = graphql_type_to_python(
-            &json!({"kind": "SCALAR", "name": "String"}),
-            &types,
-        );
+        let (t, req, _) =
+            graphql_type_to_python(&json!({"kind": "SCALAR", "name": "String"}), &types);
         assert_eq!(t, ParamType::String);
         assert!(!req);
 
@@ -473,10 +472,8 @@ mod tests {
         assert_eq!(t, ParamType::String);
         assert!(req);
 
-        let (t, _, _) = graphql_type_to_python(
-            &json!({"kind": "SCALAR", "name": "Boolean"}),
-            &types,
-        );
+        let (t, _, _) =
+            graphql_type_to_python(&json!({"kind": "SCALAR", "name": "Boolean"}), &types);
         assert_eq!(t, ParamType::Boolean);
 
         let (t, req, _) = graphql_type_to_python(
@@ -500,17 +497,10 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .filter_map(|t| {
-                Some((
-                    t.get("name")?.as_str()?.to_string(),
-                    t.clone(),
-                ))
-            })
+            .filter_map(|t| Some((t.get("name")?.as_str()?.to_string(), t.clone())))
             .collect();
-        let (_, _, choices) = graphql_type_to_python(
-            &json!({"kind": "ENUM", "name": "Status"}),
-            &types,
-        );
+        let (_, _, choices) =
+            graphql_type_to_python(&json!({"kind": "ENUM", "name": "Status"}), &types);
         assert_eq!(
             choices.unwrap(),
             vec!["ACTIVE".to_string(), "INACTIVE".into(), "BANNED".into()]

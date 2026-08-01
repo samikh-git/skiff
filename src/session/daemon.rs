@@ -12,7 +12,9 @@ use tokio::net::UnixListener;
 use tokio::sync::Mutex;
 
 use crate::error::{Error, Result};
-use crate::mcp::{call_tool_on, connect_http, connect_stdio_with, list_tools_on, McpClient, TransportMode};
+use crate::mcp::{
+    call_tool_on, connect_http, connect_stdio_with, list_tools_on, McpClient, TransportMode,
+};
 use crate::session::paths::{
     chmod_0600, session_meta_path, session_sock_path, unlink_session_files, write_meta, SessionMeta,
 };

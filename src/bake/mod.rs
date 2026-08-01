@@ -41,13 +41,19 @@ pub struct BakedTool {
     pub oauth_client_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oauth_client_secret: Option<String>,
-    #[serde(default = "default_oauth_client_name", skip_serializing_if = "is_default_oauth_client_name")]
+    #[serde(
+        default = "default_oauth_client_name",
+        skip_serializing_if = "is_default_oauth_client_name"
+    )]
     pub oauth_client_name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oauth_scope: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oauth_redirect_uri: Option<String>,
-    #[serde(default = "default_oauth_flow", skip_serializing_if = "is_default_oauth_flow")]
+    #[serde(
+        default = "default_oauth_flow",
+        skip_serializing_if = "is_default_oauth_flow"
+    )]
     pub oauth_flow: String,
     /// Prefer routing through this named session daemon when present
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -206,7 +212,10 @@ impl BakedTool {
     /// Copy suitable for `bake show` (literal secrets masked).
     pub fn masked_for_display(&self) -> Value {
         let mut display = serde_json::to_value(self).unwrap_or(Value::Null);
-        if let Some(headers) = display.get_mut("auth_headers").and_then(|v| v.as_array_mut()) {
+        if let Some(headers) = display
+            .get_mut("auth_headers")
+            .and_then(|v| v.as_array_mut())
+        {
             for entry in headers {
                 if let Some(arr) = entry.as_array_mut() {
                     if arr.len() >= 2 {
@@ -254,18 +263,8 @@ pub fn load_baked_all() -> Result<BakedStore> {
 pub fn save_baked_all(store: &BakedStore) -> Result<()> {
     // Pretty-print to match Python `indent=2` baked.json.
     let path = baked_file();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
     let text = serde_json::to_string_pretty(store)? + "\n";
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, text)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600));
-    }
-    fs::rename(&tmp, &path)?;
+    crate::fsutil::atomic_write_0600(&path, text.as_bytes())?;
     Ok(())
 }
 
@@ -299,7 +298,9 @@ pub fn parse_auth_header_raw(items: &[String]) -> Result<Vec<(String, String)>> 
     let mut out = Vec::new();
     for item in items {
         let Some((k, v)) = item.split_once(':') else {
-            return Err(Error::usage(format!("invalid auth header format: {item:?}")));
+            return Err(Error::usage(format!(
+                "invalid auth header format: {item:?}"
+            )));
         };
         out.push((k.trim().to_string(), v.trim().to_string()));
     }
@@ -506,7 +507,10 @@ mod tests {
             ..Default::default()
         };
         let argv = cfg.to_argv();
-        let idx = argv.iter().position(|a| a == "--oauth-redirect-uri").unwrap();
+        let idx = argv
+            .iter()
+            .position(|a| a == "--oauth-redirect-uri")
+            .unwrap();
         assert_eq!(argv[idx + 1], uri);
     }
 

@@ -211,7 +211,9 @@ impl GlobalArgs {
         Ok(out)
     }
 
-    pub fn parse_env_vars(&self) -> crate::error::Result<std::collections::BTreeMap<String, String>> {
+    pub fn parse_env_vars(
+        &self,
+    ) -> crate::error::Result<std::collections::BTreeMap<String, String>> {
         let mut out = std::collections::BTreeMap::new();
         for item in &self.env {
             let Some((k, v)) = item.split_once('=') else {

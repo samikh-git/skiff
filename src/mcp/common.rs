@@ -9,9 +9,7 @@ use crate::model::CommandDef;
 
 pub type McpClient = rmcp::service::RunningService<rmcp::RoleClient, ()>;
 
-pub fn tools_from_rmcp(
-    tools: impl IntoIterator<Item = rmcp::model::Tool>,
-) -> Vec<Value> {
+pub fn tools_from_rmcp(tools: impl IntoIterator<Item = rmcp::model::Tool>) -> Vec<Value> {
     let mut out = Vec::new();
     for t in tools {
         let schema = serde_json::to_value(&t.input_schema)

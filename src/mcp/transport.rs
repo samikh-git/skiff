@@ -73,10 +73,26 @@ pub async fn call_tool(
 ) -> Result<Value> {
     match transport {
         TransportMode::Streamable => {
-            call_tool_http(url, auth_headers, tool_name, arguments, full_envelope, oauth).await
+            call_tool_http(
+                url,
+                auth_headers,
+                tool_name,
+                arguments,
+                full_envelope,
+                oauth,
+            )
+            .await
         }
         TransportMode::Sse => {
-            call_tool_sse(url, auth_headers, tool_name, arguments, full_envelope, oauth).await
+            call_tool_sse(
+                url,
+                auth_headers,
+                tool_name,
+                arguments,
+                full_envelope,
+                oauth,
+            )
+            .await
         }
         TransportMode::Auto => {
             match call_tool_http(
@@ -92,13 +108,20 @@ pub async fn call_tool(
                 Ok(v) => Ok(v),
                 Err(streamable_err) => {
                     tracing::debug!("streamable call failed, trying SSE: {streamable_err}");
-                    call_tool_sse(url, auth_headers, tool_name, arguments, full_envelope, oauth)
-                        .await
-                        .map_err(|sse_err| {
-                            Error::runtime(format!(
-                                "MCP call failed (streamable: {streamable_err}; sse: {sse_err})"
-                            ))
-                        })
+                    call_tool_sse(
+                        url,
+                        auth_headers,
+                        tool_name,
+                        arguments,
+                        full_envelope,
+                        oauth,
+                    )
+                    .await
+                    .map_err(|sse_err| {
+                        Error::runtime(format!(
+                            "MCP call failed (streamable: {streamable_err}; sse: {sse_err})"
+                        ))
+                    })
                 }
             }
         }

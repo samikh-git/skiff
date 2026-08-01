@@ -20,6 +20,7 @@ pub fn split_at_subcommand(
     value_options: &HashSet<String>,
     bool_options: &HashSet<String>,
 ) -> (Vec<OsString>, Vec<OsString>) {
+    let _ = bool_options; // retained for API parity / future stricter splitting
     let mut i = 0;
     while i < argv.len() {
         let arg = argv[i].to_string_lossy();
@@ -31,9 +32,8 @@ pub fn split_at_subcommand(
                 i += 1;
             } else if value_options.contains(arg.as_ref()) {
                 i += 2;
-            } else if bool_options.contains(arg.as_ref()) {
-                i += 1;
             } else {
+                // Bool flags and unknown dashed tokens stay in the global slice.
                 i += 1;
             }
         } else {

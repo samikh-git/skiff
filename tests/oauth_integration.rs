@@ -142,14 +142,8 @@ fn oauth_list_without_creds_fails() {
 
     // No OAuth: should not get past Bearer gate (or fail discovery/connect).
     let (mut cmd, _dir) = mcp2cli_isolated();
-    cmd.args([
-        "--mcp",
-        &server.url,
-        "--transport",
-        "streamable",
-        "--list",
-    ])
-    .timeout(Duration::from_secs(45))
-    .assert()
-    .failure();
+    cmd.args(["--mcp", &server.url, "--transport", "streamable", "--list"])
+        .timeout(Duration::from_secs(45))
+        .assert()
+        .failure();
 }

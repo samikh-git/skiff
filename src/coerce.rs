@@ -126,14 +126,16 @@ pub fn coerce_value(value: Option<Value>, schema: &Value) -> Option<Value> {
 /// Resolve `env:VAR`, `file:/path`, or literal secret values.
 pub fn resolve_secret(value: &str) -> Result<String> {
     if let Some(var) = value.strip_prefix("env:") {
-        return std::env::var(var).map_err(|_| {
-            Error::runtime(format!("environment variable {var:?} is not set"))
-        });
+        return std::env::var(var)
+            .map_err(|_| Error::runtime(format!("environment variable {var:?} is not set")));
     }
     if let Some(path) = value.strip_prefix("file:") {
         let path = std::path::Path::new(path);
         if !path.exists() {
-            return Err(Error::runtime(format!("secret file not found: {}", path.display())));
+            return Err(Error::runtime(format!(
+                "secret file not found: {}",
+                path.display()
+            )));
         }
         let text = std::fs::read_to_string(path)?;
         return Ok(text.trim_end_matches('\n').to_string());
@@ -186,6 +188,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::approx_constant)]
     fn coerce_basics() {
         assert!(coerce_value(None, &json!({"type": "string"})).is_none());
         assert_eq!(

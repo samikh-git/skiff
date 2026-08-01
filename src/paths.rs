@@ -3,10 +3,8 @@
 use std::path::PathBuf;
 use std::sync::{LazyLock, RwLock};
 
-static CACHE_DIR_OVERRIDE: LazyLock<RwLock<Option<PathBuf>>> =
-    LazyLock::new(|| RwLock::new(None));
-static CONFIG_DIR_OVERRIDE: LazyLock<RwLock<Option<PathBuf>>> =
-    LazyLock::new(|| RwLock::new(None));
+static CACHE_DIR_OVERRIDE: LazyLock<RwLock<Option<PathBuf>>> = LazyLock::new(|| RwLock::new(None));
+static CONFIG_DIR_OVERRIDE: LazyLock<RwLock<Option<PathBuf>>> = LazyLock::new(|| RwLock::new(None));
 
 /// Override cache dir (for tests). `None` clears the override.
 pub fn set_cache_dir_override(path: Option<PathBuf>) {
@@ -19,7 +17,11 @@ pub fn set_config_dir_override(path: Option<PathBuf>) {
 }
 
 pub fn cache_dir() -> PathBuf {
-    if let Some(p) = CACHE_DIR_OVERRIDE.read().expect("cache override lock").clone() {
+    if let Some(p) = CACHE_DIR_OVERRIDE
+        .read()
+        .expect("cache override lock")
+        .clone()
+    {
         return p;
     }
     if let Ok(p) = std::env::var("MCP2CLI_CACHE_DIR") {
@@ -65,4 +67,3 @@ pub const DEFAULT_CACHE_TTL: u64 = 3600;
 /// Shared lock so tests that override cache/config dirs don't race.
 #[cfg(test)]
 pub static TEST_PATHS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-

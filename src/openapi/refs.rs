@@ -83,8 +83,6 @@ mod tests {
             "b": {"$ref": "#/a"},
         });
         let resolved = resolve_refs(spec);
-        assert!(
-            resolved["a"].get("$ref").is_some() || resolved["b"].get("$ref").is_some()
-        );
+        assert!(resolved["a"].get("$ref").is_some() || resolved["b"].get("$ref").is_some());
     }
 }

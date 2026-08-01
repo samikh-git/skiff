@@ -36,8 +36,7 @@ pub fn extract_openapi_commands(spec: &Value) -> Vec<CommandDef> {
                 let slug = path
                     .trim_matches('/')
                     .replace('/', "-")
-                    .replace('{', "")
-                    .replace('}', "");
+                    .replace(['{', '}'], "");
                 if slug.is_empty() {
                     method.clone()
                 } else {

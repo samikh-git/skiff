@@ -23,16 +23,11 @@ pub fn filter_by_search(commands: Vec<CommandDef>, pattern: &str) -> Vec<Command
     let p = pattern.to_lowercase();
     commands
         .into_iter()
-        .filter(|c| {
-            c.name.to_lowercase().contains(&p) || c.description.to_lowercase().contains(&p)
-        })
+        .filter(|c| c.name.to_lowercase().contains(&p) || c.description.to_lowercase().contains(&p))
         .collect()
 }
 
-pub fn list_commands(
-    commands: &[CommandDef],
-    opts: &ListOptions,
-) -> crate::error::Result<()> {
+pub fn list_commands(commands: &[CommandDef], opts: &ListOptions) -> crate::error::Result<()> {
     if opts.json_output {
         let payload = if opts.compact {
             Value::Array(
@@ -87,12 +82,9 @@ pub fn list_commands(
             for (group, cmds) in groups {
                 println!("\n{group}:");
                 for cmd in cmds {
-                    let method = cmd
-                        .method
-                        .as_deref()
-                        .unwrap_or("")
-                        .to_uppercase();
-                    let desc = truncate_desc(&cmd.description, if opts.verbose { 10_000 } else { 60 });
+                    let method = cmd.method.as_deref().unwrap_or("").to_uppercase();
+                    let desc =
+                        truncate_desc(&cmd.description, if opts.verbose { 10_000 } else { 60 });
                     if desc.is_empty() {
                         println!("  {:<45} {:<6}", cmd.name, method);
                     } else {

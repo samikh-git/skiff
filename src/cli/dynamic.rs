@@ -61,22 +61,14 @@ pub fn parse_tool_args(commands: &[CommandDef], remaining: &[String]) -> Result<
             .ok_or_else(|| Error::usage(format!("unknown option: {arg}")))?;
 
         match param.python_type {
-            ParamType::Boolean
-                if param.location == crate::model::ParamLocation::GraphqlArg =>
-            {
+            ParamType::Boolean if param.location == crate::model::ParamLocation::GraphqlArg => {
                 // GraphQL booleans: bare `--flag` ⇒ true; `--flag true|false` also accepted.
                 i += 1;
                 if let Some(raw) = remaining.get(i) {
                     let lower = raw.to_lowercase();
-                    if matches!(
-                        lower.as_str(),
-                        "true" | "false" | "1" | "0" | "yes" | "no"
-                    ) {
+                    if matches!(lower.as_str(), "true" | "false" | "1" | "0" | "yes" | "no") {
                         let coerced = coerce_value(Some(Value::String(raw.clone())), &param.schema)
-                            .unwrap_or(Value::Bool(matches!(
-                                lower.as_str(),
-                                "true" | "1" | "yes"
-                            )));
+                            .unwrap_or(Value::Bool(matches!(lower.as_str(), "true" | "1" | "yes")));
                         values.insert(param.original_name.clone(), coerced);
                         i += 1;
                         continue;

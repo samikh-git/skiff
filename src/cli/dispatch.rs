@@ -16,9 +16,10 @@ use crate::cli::list::{
 use crate::cli::{global_option_sets, split_at_subcommand};
 use crate::error::{Error, Result};
 use crate::filter::filter_commands;
+use crate::graphql::{execute_graphql, extract_graphql_commands, load_graphql_schema};
 use crate::mcp::{
-    call_tool_http, call_tool_stdio, fetch_mcp_tools_http, fetch_mcp_tools_stdio, tools_to_commands,
-    TransportMode,
+    call_tool_http, call_tool_stdio, fetch_mcp_tools_http, fetch_mcp_tools_stdio,
+    tools_to_commands, TransportMode,
 };
 use crate::model::BakeConfig;
 use crate::oauth::{
@@ -28,7 +29,6 @@ use crate::oauth::{
 use crate::openapi::{
     execute_openapi, extract_openapi_commands, load_openapi_spec, resolve_base_url,
 };
-use crate::graphql::{execute_graphql, extract_graphql_commands, load_graphql_schema};
 use crate::output::output_result;
 use crate::usage::{record_usage, source_hash_for};
 
@@ -62,10 +62,10 @@ fn dispatch_impl(argv: Vec<OsString>, bake_config: Option<BakeConfig>) -> Result
 
     let mut pre_args = GlobalArgs::try_parse_from(&clap_argv).map_err(|e| {
         let msg = e.to_string();
-        if msg.contains("help") || e.kind() == clap::error::ErrorKind::DisplayHelp {
-            e.print().ok();
-            Error::usage("__printed__")
-        } else if e.kind() == clap::error::ErrorKind::DisplayVersion {
+        if msg.contains("help")
+            || e.kind() == clap::error::ErrorKind::DisplayHelp
+            || e.kind() == clap::error::ErrorKind::DisplayVersion
+        {
             e.print().ok();
             Error::usage("__printed__")
         } else {

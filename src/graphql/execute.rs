@@ -73,12 +73,7 @@ pub fn build_selection_set(
         let f_kind = f_named.get("kind").and_then(|k| k.as_str()).unwrap_or("");
         if matches!(f_kind, "SCALAR" | "ENUM") {
             parts.push(fname.to_string());
-        } else if f_kind == "OBJECT" && depth > 1 {
-            let nested = build_selection_set(f_type, types_by_name, depth - 1, seen);
-            if !nested.is_empty() {
-                parts.push(format!("{fname} {nested}"));
-            }
-        } else if matches!(f_kind, "INTERFACE" | "UNION") && depth > 1 {
+        } else if matches!(f_kind, "OBJECT" | "INTERFACE" | "UNION") && depth > 1 {
             let nested = build_selection_set(f_type, types_by_name, depth - 1, seen);
             if !nested.is_empty() {
                 parts.push(format!("{fname} {nested}"));
@@ -141,7 +136,8 @@ pub fn build_graphql_document(
     } else {
         for p in &cmd.params {
             if let Some(val) = values.get(&p.original_name) {
-                let coerced = coerce_value(Some(val.clone()), &p.schema).unwrap_or_else(|| val.clone());
+                let coerced =
+                    coerce_value(Some(val.clone()), &p.schema).unwrap_or_else(|| val.clone());
                 variables.insert(p.original_name.clone(), coerced);
             }
         }
@@ -186,10 +182,7 @@ pub fn build_graphql_document(
     } else {
         format!("({})", field_args.join(", "))
     };
-    let op_type = cmd
-        .graphql_operation_type
-        .as_deref()
-        .unwrap_or("query");
+    let op_type = cmd.graphql_operation_type.as_deref().unwrap_or("query");
     let var_decls_str = if var_decls.is_empty() {
         String::new()
     } else {
@@ -283,10 +276,7 @@ pub fn execute_graphql(
     }
 
     let data = result.get("data").cloned().unwrap_or(Value::Null);
-    let field_data = data
-        .get(&field_name)
-        .cloned()
-        .unwrap_or(data);
+    let field_data = data.get(&field_name).cloned().unwrap_or(data);
     output_result(field_data, output).map_err(Error::from)?;
     Ok(())
 }

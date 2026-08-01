@@ -36,12 +36,7 @@ fn oauth_secret_requires_client_id() {
 #[test]
 fn oauth_rejected_with_stdio() {
     mcp2cli()
-        .args([
-            "--mcp-stdio",
-            "echo hi",
-            "--oauth",
-            "--list",
-        ])
+        .args(["--mcp-stdio", "echo hi", "--oauth", "--list"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("not supported with --mcp-stdio"));
@@ -65,10 +60,7 @@ fn oauth_redirect_https_rejected() {
 
 #[test]
 fn oauth_clear_requires_discovery_url() {
-    mcp2cli()
-        .args(["--oauth-clear"])
-        .assert()
-        .failure();
+    mcp2cli().args(["--oauth-clear"]).assert().failure();
 }
 
 #[test]

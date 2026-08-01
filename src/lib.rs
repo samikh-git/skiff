@@ -8,6 +8,7 @@ pub mod cli;
 pub mod coerce;
 pub mod error;
 pub mod filter;
+pub mod fsutil;
 pub mod graphql;
 pub mod mcp;
 pub mod model;

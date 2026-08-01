@@ -11,9 +11,7 @@ use crate::coerce::resolve_secret;
 use crate::error::{Error, Result};
 use crate::oauth::browser::open_authorization_url;
 use crate::oauth::callback::wait_for_callback;
-use crate::oauth::config::{
-    parse_oauth_flow, resolve_redirect_uri, OAuthFlow, OAuthOptions,
-};
+use crate::oauth::config::{parse_oauth_flow, resolve_redirect_uri, OAuthFlow, OAuthOptions};
 use crate::oauth::store::{clear_server_credentials, FileCredentialStore};
 
 const CALLBACK_TIMEOUT: Duration = Duration::from_secs(300);
@@ -42,9 +40,7 @@ impl OAuthReady {
 
 /// Whether any OAuth flag requests auth.
 pub fn oauth_wanted(args: &GlobalArgs) -> bool {
-    args.oauth
-        || args.oauth_client_id.is_some()
-        || args.oauth_client_secret.is_some()
+    args.oauth || args.oauth_client_id.is_some() || args.oauth_client_secret.is_some()
 }
 
 /// Validate CLI oauth flags and resolve secrets into [`OAuthOptions`].
@@ -168,8 +164,8 @@ pub async fn authorize(server_url: &str, opts: &OAuthOptions) -> Result<OAuthRea
     }
     store.save_sticky_redirect_uri(&redirect)?;
 
-    let mut request = AuthorizationRequest::new(redirect.clone())
-        .with_client_name(opts.client_name.clone());
+    let mut request =
+        AuthorizationRequest::new(redirect.clone()).with_client_name(opts.client_name.clone());
     if let Some(id) = &opts.client_id {
         request = request.with_preregistered_client(id.clone());
         if let Some(sec) = &opts.client_secret {

@@ -185,10 +185,7 @@ fn session_idle_timeout_exits() {
         .success();
 
     // Touch once so last_activity is set, then wait for idle exit.
-    let _ = env
-        .cmd()
-        .args(["--session", name, "--list"])
-        .output();
+    let _ = env.cmd().args(["--session", name, "--list"]).output();
 
     let deadline = std::time::Instant::now() + Duration::from_secs(8);
     while std::time::Instant::now() < deadline {
